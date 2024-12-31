@@ -98,8 +98,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text("Location: ${history['location'] ?? 'N/A'}"),
-                            Text("Date: ${history['dateTime'] ?? 'N/A'}"),
-                            Text("Caller: ${history['caller'] ?? 'N/A'}"),
+                            Text("Date: ${history['dispatchTime'] ?? 'N/A'}"),
+                            Text("Dispatch by: ${history['caller'] ?? 'ADMIN'}"),
                             Text("Status: ${history['status'] ?? 'N/A'}"),
                           ],
                         ),

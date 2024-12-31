@@ -118,19 +118,21 @@ void _triggerDispatchAlert() {
 
 
   Future<void> _fetchRescuerId() async {
-    final User? user = FirebaseAuth.instance.currentUser; // Get signed-in user
+  final User? user = FirebaseAuth.instance.currentUser; // Get signed-in user
 
-    if (user != null) {
-      setState(() {
-        rescuerId = user.uid; // Use Firebase UID as rescuerId
-      });
-      _listenForDispatchUpdates(); // Start listening for updates after fetching rescuerId
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No user is signed in.')),
-      );
-    }
+  if (user != null) {
+    setState(() {
+      rescuerId = user.uid; // Use Firebase UID as rescuerId
+    });
+    print("Rescuer ID Fetched: $rescuerId");
+    _listenForDispatchUpdates(); // Start listening for updates after fetching rescuerId
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No user is signed in.')),
+    );
   }
+}
+
 
   Future<void> _checkLocationPermission() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -187,29 +189,38 @@ void _triggerDispatchAlert() {
     );
   }
 
-  void _listenForDispatchUpdates() {
-    if (rescuerId == null) {
-      print("Rescuer ID is not available.");
-      return;
-    }
-
-    final DatabaseReference dispatchRef =
-        FirebaseDatabase.instance.ref('dispatches'); // Replace with your Firebase dispatch path
-
-    _firebaseDispatchListener = dispatchRef.onValue.listen((DatabaseEvent event) {
-      final data = event.snapshot.value as Map<dynamic, dynamic>?;
-
-      if (data != null) {
-        data.forEach((key, dispatch) {
-          if (dispatch['rescuerID'] == rescuerId && dispatch['status'] == "dispatching") {
-            _showDispatchNotification(dispatch, key);
-          }
-        });
-      }
-    });
+ void _listenForDispatchUpdates() {
+  if (rescuerId == null) {
+    print("Rescuer ID is not available.");
+    return;
   }
 
+  final DatabaseReference dispatchRef =
+      FirebaseDatabase.instance.ref('dispatches'); // Firebase path
+
+  _firebaseDispatchListener = dispatchRef.onValue.listen((DatabaseEvent event) {
+    print("Firebase Listener Triggered");
+
+    final data = event.snapshot.value as Map<dynamic, dynamic>?;
+    if (data != null) {
+      data.forEach((key, dispatch) {
+        print("Dispatch Data: $dispatch");
+        if (dispatch['rescuerID'] == rescuerId && dispatch['status'] == "Dispatching") {
+          print("Dispatch Matched for Rescuer: $key");
+          _showDispatchNotification(dispatch, key);
+        } else {
+          print("No match for rescuerID or status.");
+        }
+      });
+    } else {
+      print("No data in dispatches node.");
+    }
+  });
+}
+
+
 void _showDispatchNotification(Map<dynamic, dynamic> dispatch, String dispatchKey) {
+   if (!mounted) return;
   final String location = dispatch['location'] ?? "Unknown location";
   final String dispatchTime = dispatch['dispatchTime'] ?? "Unknown time";
 
@@ -335,7 +346,7 @@ void _showDispatchNotification(Map<dynamic, dynamic> dispatch, String dispatchKe
         FirebaseDatabase.instance.ref('dispatches/$dispatchKey');
     await dispatchRef.update({"status": status});
   }
-
+ 
   Future<void> _setFireLocation(String location) async {
     final accessToken = "your-mapbox-access-token"; // Replace with your Mapbox access token
     final url =
