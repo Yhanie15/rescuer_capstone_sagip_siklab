@@ -1,3 +1,4 @@
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -222,121 +223,123 @@ class _NavigationPageState extends State<NavigationPage> {
   }
 
   void _showDispatchNotification(Map<dynamic, dynamic> dispatch, String dispatchKey) {
-    if (!mounted) return;
-    final String location = dispatch['location'] ?? "Unknown location";
-    final String dispatchTime = dispatch['dispatchTime'] ?? "Unknown time";
+  if (!mounted) return;
+  final String location = dispatch['location'] ?? "Unknown location";
+  final String dispatchTime = dispatch['dispatchTime'] ?? "Unknown time";
 
-    _triggerDispatchAlert(); // Start sound and blinking when dispatch received
+  _triggerDispatchAlert(); // Start sound and blinking when dispatch received
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15),
-        ),
-        backgroundColor: const Color.fromRGBO(255, 234, 234, 1),
-        title: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.warning, color: Colors.red),
-            SizedBox(width: 10),
-            Text(
-              'Dispatch Notification',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'You have been dispatched to:',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              location,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Dispatch Time:',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              dispatchTime,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () async {
-              _stopSirenAnimation();
-              _stopSoundAlert(); // Stop sound
-              _stopBlinkingBackground(); // Stop blinking background
-              await _updateDispatchStatus(dispatchKey, "Dispatched"); // Update dispatch status
-
-              Navigator.of(context).pop(); // Close the dialog
-
-              // Show route and slidable button
-              setState(() {
-                isNavigating = true; // Show the route
-                showSlidableButton = true; // Show the slidable button
-              });
-
-              // Fetch and display the route
-              await _setFireLocation(location);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text(
-              'Accept',
-              style: TextStyle(fontSize: 16),
+  showDialog(
+    context: context,
+    barrierDismissible: false, // Prevent the dialog from being dismissed by tapping outside
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+      ),
+      backgroundColor: const Color.fromRGBO(255, 234, 234, 1),
+      title: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.warning, color: Colors.red),
+          SizedBox(width: 10),
+          Text(
+            'Dispatch Notification',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'You have been dispatched to:',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            location,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
             ),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              _stopSirenAnimation();
-              _stopSoundAlert(); // Stop sound
-              _stopBlinkingBackground(); // Stop blinking background
-              await _updateDispatchStatus(dispatchKey, "Rejected"); // Update dispatch status
-              Navigator.of(context).pop(); // Close the dialog
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text(
-              'Reject',
-              style: TextStyle(fontSize: 16),
+          const SizedBox(height: 10),
+          Text(
+            'Dispatch Time:',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            dispatchTime,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
             ),
           ),
         ],
       ),
-    );
-  }
+      actions: [
+        ElevatedButton(
+          onPressed: () async {
+            _stopSirenAnimation();
+            _stopSoundAlert(); // Stop sound
+            _stopBlinkingBackground(); // Stop blinking background
+            await _updateDispatchStatus(dispatchKey, "Dispatched"); // Update dispatch status
+
+            Navigator.of(context).pop(); // Close the dialog
+
+            // Show route and slidable button
+            setState(() {
+              isNavigating = true; // Show the route
+              showSlidableButton = true; // Show the slidable button
+            });
+
+            // Fetch and display the route
+            await _setFireLocation(location);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          child: const Text(
+            'Accept',
+            style: TextStyle(fontSize: 16),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            _stopSirenAnimation();
+            _stopSoundAlert(); // Stop sound
+            _stopBlinkingBackground(); // Stop blinking background
+            await _updateDispatchStatus(dispatchKey, "Rejected"); // Update dispatch status
+            Navigator.of(context).pop(); // Close the dialog
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          child: const Text(
+            'Reject',
+            style: TextStyle(fontSize: 16),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 
   /// Updates the status of a dispatch in the 'dispatches' table and
   /// ensures that the corresponding 'reports_image' entries inherit the same status.
@@ -454,46 +457,27 @@ class _NavigationPageState extends State<NavigationPage> {
       backgroundColor: isAlerting && _isRedBackground
           ? Colors.red.withAlpha(128)
           : const Color.fromARGB(255, 30, 21, 21),
-    appBar: AppBar(
-  backgroundColor: const Color.fromARGB(255, 137, 17, 8),
-  title: RichText(
-    text: const TextSpan(
-      style: TextStyle(
-        fontSize: 25, // Adjust font size as needed
-        fontWeight: FontWeight.bold,
+      appBar: AppBar(
+        backgroundColor: const Color.fromARGB(255, 224, 51, 39),
+        title: const Text("SAGIP : SIKLAB"),
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.my_location),
+            onPressed: _recenterMap,
+          ),
+        ],
       ),
-      children: [
-        TextSpan(
-          text: 'SAGIP ',
-          style: TextStyle(color: Color.fromARGB(255, 210, 191, 15)),
-        ),
-      
-        TextSpan(
-          text: 'SIKLAB',
-          style: TextStyle(color: Color.fromARGB(255, 240, 82, 70)),
-        ),
-      ],
-    ),
-  ),
-  leading: IconButton(
-    icon: const Icon(Icons.menu),
-    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-  ),
-  actions: [
-    IconButton(
-      icon: const Icon(Icons.my_location),
-      onPressed: _recenterMap,
-    ),
-  ],
-),
-
       drawer: Drawer(
         child: ListView(
           children: [
            DrawerHeader(
   decoration: const BoxDecoration(
     gradient: LinearGradient(
-      colors: [Color.fromARGB(255, 50, 4, 4), Color.fromARGB(255, 131, 23, 23)], // Gradient for a sleek design
+      colors: [Color(0xFFB71C1C), Color(0xFFD32F2F)], // Gradient for a sleek design
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
