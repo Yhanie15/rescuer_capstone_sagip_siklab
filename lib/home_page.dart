@@ -29,13 +29,13 @@ class _NavigationPageState extends State<NavigationPage> {
   final MapController _mapController = MapController();
   final FlutterTts _tts = FlutterTts();
   final TextEditingController _fireLocationController = TextEditingController();
-final AudioPlayer _audioPlayer = AudioPlayer(); // For sound alert
+  final AudioPlayer _audioPlayer = AudioPlayer(); // For sound alert
 
-bool _isSirenVisible = false; // Toggles the siren visibility
-Timer? _sirenTimer; // Timer for siren animation
-bool isAlerting = false; // Indicates if dispatch alert is active
-bool _isRedBackground = false; // For blinking background
-Timer? _blinkTimer; // Timer for background blinking
+  bool _isSirenVisible = false; // Toggles the siren visibility
+  Timer? _sirenTimer; // Timer for siren animation
+  bool isAlerting = false; // Indicates if dispatch alert is active
+  bool _isRedBackground = false; // For blinking background
+  Timer? _blinkTimer; // Timer for background blinking
 
   LatLng? _currentLocation;
   LatLng? fireLocation;
@@ -51,7 +51,7 @@ Timer? _blinkTimer; // Timer for background blinking
   bool isNavigating = false;
   bool showSlidableButton = false;
   bool showRoute = false;
-  
+
   @override
   void initState() {
     super.initState();
@@ -64,75 +64,78 @@ Timer? _blinkTimer; // Timer for background blinking
     _positionStream?.cancel();
     _firebaseDispatchListener?.cancel(); // Cancel Firebase listener
     _fireLocationController.dispose();
+    _stopSoundAlert(); // Ensure sound is stopped
+    _stopBlinkingBackground(); // Ensure blinking is stopped
     super.dispose();
   }
-Future<void> _playSoundAlert() async {
-  await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-  await _audioPlayer.play(AssetSource('alert.mp3')); // Add alert.mp3 to assets
-}
-Future<void> _stopSoundAlert() async {
-  await _audioPlayer.stop();
-}
-void _startBlinkingBackground() {
-  setState(() {
-    isAlerting = true;
-  });
 
-  _blinkTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+  Future<void> _playSoundAlert() async {
+    await _audioPlayer.setReleaseMode(ReleaseMode.loop);
+    await _audioPlayer.play(AssetSource('alert.mp3')); // Add alert.mp3 to assets
+  }
+
+  Future<void> _stopSoundAlert() async {
+    await _audioPlayer.stop();
+  }
+
+  void _startBlinkingBackground() {
     setState(() {
-      _isRedBackground = !_isRedBackground;
+      isAlerting = true;
     });
-  });
-}
 
-void _stopBlinkingBackground() {
-  _blinkTimer?.cancel();
-  setState(() {
-    isAlerting = false;
-    _isRedBackground = false;
-  });
-}
-
-void _startSirenAnimation() {
-  setState(() {
-    _isSirenVisible = true; // Make the siren visible
-  });
-}
-void _stopSirenAnimation() {
-  setState(() {
-    _isSirenVisible = false; // Hide the siren
-  });
-}
-
-
-void _triggerDispatchAlert() {
-  if (!isAlerting) { // I-check kung hindi pa alerting
-    _playSoundAlert();
-    _startBlinkingBackground();
-    _startSirenAnimation();
-    setState(() {
-      isAlerting = true; // Set to true kapag nag-start ang alert
+    _blinkTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+      setState(() {
+        _isRedBackground = !_isRedBackground;
+      });
     });
   }
-}
 
+  void _stopBlinkingBackground() {
+    _blinkTimer?.cancel();
+    setState(() {
+      isAlerting = false;
+      _isRedBackground = false;
+    });
+  }
+
+  void _startSirenAnimation() {
+    setState(() {
+      _isSirenVisible = true; // Make the siren visible
+    });
+  }
+
+  void _stopSirenAnimation() {
+    setState(() {
+      _isSirenVisible = false; // Hide the siren
+    });
+  }
+
+  void _triggerDispatchAlert() {
+    if (!isAlerting) { // Check if not already alerting
+      _playSoundAlert();
+      _startBlinkingBackground();
+      _startSirenAnimation();
+      setState(() {
+        isAlerting = true; // Set to true when alert starts
+      });
+    }
+  }
 
   Future<void> _fetchRescuerId() async {
-  final User? user = FirebaseAuth.instance.currentUser; // Get signed-in user
+    final User? user = FirebaseAuth.instance.currentUser; // Get signed-in user
 
-  if (user != null) {
-    setState(() {
-      rescuerId = user.uid; // Use Firebase UID as rescuerId
-    });
-    print("Rescuer ID Fetched: $rescuerId");
-    _listenForDispatchUpdates(); // Start listening for updates after fetching rescuerId
-  } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('No user is signed in.')),
-    );
+    if (user != null) {
+      setState(() {
+        rescuerId = user.uid; // Use Firebase UID as rescuerId
+      });
+      print("Rescuer ID Fetched: $rescuerId");
+      _listenForDispatchUpdates(); // Start listening for updates after fetching rescuerId
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No user is signed in.')),
+      );
+    }
   }
-}
-
 
   Future<void> _checkLocationPermission() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -181,7 +184,7 @@ void _triggerDispatchAlert() {
           }
         });
 
-        _checkNextTurn(position);
+       
       },
       onError: (e) {
         print("Error fetching location: $e");
@@ -189,168 +192,194 @@ void _triggerDispatchAlert() {
     );
   }
 
- void _listenForDispatchUpdates() {
-  if (rescuerId == null) {
-    print("Rescuer ID is not available.");
-    return;
+  void _listenForDispatchUpdates() {
+    if (rescuerId == null) {
+      print("Rescuer ID is not available.");
+      return;
+    }
+
+    final DatabaseReference dispatchRef =
+        FirebaseDatabase.instance.ref('dispatches'); // Firebase path
+
+    _firebaseDispatchListener = dispatchRef.onValue.listen((DatabaseEvent event) {
+      print("Firebase Listener Triggered");
+
+      final data = event.snapshot.value as Map<dynamic, dynamic>?;
+      if (data != null) {
+        data.forEach((key, dispatch) {
+          print("Dispatch Data: $dispatch");
+          if (dispatch['rescuerID'] == rescuerId && dispatch['status'] == "Dispatching") {
+            print("Dispatch Matched for Rescuer: $key");
+            _showDispatchNotification(dispatch, key);
+          } else {
+            print("No match for rescuerID or status.");
+          }
+        });
+      } else {
+        print("No data in dispatches node.");
+      }
+    });
   }
 
-  final DatabaseReference dispatchRef =
-      FirebaseDatabase.instance.ref('dispatches'); // Firebase path
+  void _showDispatchNotification(Map<dynamic, dynamic> dispatch, String dispatchKey) {
+    if (!mounted) return;
+    final String location = dispatch['location'] ?? "Unknown location";
+    final String dispatchTime = dispatch['dispatchTime'] ?? "Unknown time";
 
-  _firebaseDispatchListener = dispatchRef.onValue.listen((DatabaseEvent event) {
-    print("Firebase Listener Triggered");
+    _triggerDispatchAlert(); // Start sound and blinking when dispatch received
 
-    final data = event.snapshot.value as Map<dynamic, dynamic>?;
-    if (data != null) {
-      data.forEach((key, dispatch) {
-        print("Dispatch Data: $dispatch");
-        if (dispatch['rescuerID'] == rescuerId && dispatch['status'] == "Dispatching") {
-          print("Dispatch Matched for Rescuer: $key");
-          _showDispatchNotification(dispatch, key);
-        } else {
-          print("No match for rescuerID or status.");
-        }
-      });
-    } else {
-      print("No data in dispatches node.");
-    }
-  });
-}
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
+        ),
+        backgroundColor: const Color.fromRGBO(255, 234, 234, 1),
+        title: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.warning, color: Colors.red),
+            SizedBox(width: 10),
+            Text(
+              'Dispatch Notification',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'You have been dispatched to:',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              location,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Dispatch Time:',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              dispatchTime,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () async {
+              _stopSirenAnimation();
+              _stopSoundAlert(); // Stop sound
+              _stopBlinkingBackground(); // Stop blinking background
+              await _updateDispatchStatus(dispatchKey, "Dispatched"); // Update dispatch status
 
+              Navigator.of(context).pop(); // Close the dialog
 
-void _showDispatchNotification(Map<dynamic, dynamic> dispatch, String dispatchKey) {
-   if (!mounted) return;
-  final String location = dispatch['location'] ?? "Unknown location";
-  final String dispatchTime = dispatch['dispatchTime'] ?? "Unknown time";
+              // Show route and slidable button
+              setState(() {
+                isNavigating = true; // Show the route
+                showSlidableButton = true; // Show the slidable button
+              });
 
-  _triggerDispatchAlert(); // Start sound and blinking when dispatch received
-
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
-      ),
-      backgroundColor: const Color.fromRGBO(255, 234, 234, 1),
-      title: const Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.warning, color: Colors.red),
-          SizedBox(width: 10),
-          Text(
-            'Dispatch Notification',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+              // Fetch and display the route
+              await _setFireLocation(location);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'Accept',
+              style: TextStyle(fontSize: 16),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              _stopSirenAnimation();
+              _stopSoundAlert(); // Stop sound
+              _stopBlinkingBackground(); // Stop blinking background
+              await _updateDispatchStatus(dispatchKey, "Rejected"); // Update dispatch status
+              Navigator.of(context).pop(); // Close the dialog
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'Reject',
+              style: TextStyle(fontSize: 16),
+            ),
           ),
         ],
       ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'You have been dispatched to:',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            location,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Dispatch Time:',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            dispatchTime,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        ElevatedButton(
-          onPressed: () async {
-            _stopSirenAnimation();
-            _stopSoundAlert(); // Stop sound
-            _stopBlinkingBackground(); // Stop blinking background
-            _updateDispatchStatus(dispatchKey, "dispatched"); // Update dispatch status
+    );
+  }
 
-            Navigator.of(context).pop(); // Close the dialog
-
-            // Show route and slidable button
-            setState(() {
-              isNavigating = true; // Show the route
-              showSlidableButton = true; // Show the slidable button
-            });
-
-            // Fetch and display the route
-            await _setFireLocation(location);
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          child: const Text(
-            'Accept',
-            style: TextStyle(fontSize: 16),
-          ),
-        ),
-        ElevatedButton(
-          onPressed: () {
-             _stopSirenAnimation();
-            _stopSoundAlert(); // Stop sound
-            _stopBlinkingBackground(); // Stop blinking background
-            _updateDispatchStatus(dispatchKey, "rejected"); // Update dispatch status
-            Navigator.of(context).pop(); // Close the dialog
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          child: const Text(
-            'Reject',
-            style: TextStyle(fontSize: 16),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-
-
-
-
-
+  /// Updates the status of a dispatch in the 'dispatches' table and
+  /// ensures that the corresponding 'reports_image' entries inherit the same status.
   Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
+  try {
+    // Update the status in the 'dispatches' table
     final DatabaseReference dispatchRef =
         FirebaseDatabase.instance.ref('dispatches/$dispatchKey');
     await dispatchRef.update({"status": status});
+    print("Dispatch $dispatchKey status updated to $status.");
+
+    // Now, update the 'reports_image' table
+    final DatabaseReference reportsImageRef =
+        FirebaseDatabase.instance.ref('reports_image');
+
+    // Query 'reports_image' entries where 'dispatchID' equals 'dispatchKey'
+    final Query query = reportsImageRef.orderByChild('dispatchID').equalTo(dispatchKey);
+    final DatabaseEvent snapshot = await query.once();
+
+    final data = snapshot.snapshot.value as Map<dynamic, dynamic>?;
+    if (data != null) {
+      for (var key in data.keys) {
+        await reportsImageRef.child(key).update({"status": status});
+        print("reports_image entry $key status updated to $status.");
+      }
+    } else {
+      print("No reports_image entries found for dispatchID: $dispatchKey.");
+      // Optionally, notify the user or take alternative actions
+    }
+  } catch (e) {
+    print("Error updating dispatch and reports_image status: $e");
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Error updating status: $e")),
+    );
   }
- 
+}
+
+
+
   Future<void> _setFireLocation(String location) async {
     final accessToken = "your-mapbox-access-token"; // Replace with your Mapbox access token
     final url =
-        "https://api.mapbox.com/geocoding/v5/mapbox.places/$location.json?access_token=pk.eyJ1IjoieWhhbmllMTUiLCJhIjoiY2x5bHBrenB1MGxmczJpczYxbjRxbGxsYSJ9.DPO8TGv3Z4Q9zg08WhfoCQ";
+        "https://api.mapbox.com/geocoding/v5/mapbox.places/${Uri.encodeComponent(location)}.json?access_token=pk.eyJ1IjoieWhhbmllMTUiLCJhIjoiY2x5bHBrenB1MGxmczJpczYxbjRxbGxsYSJ9.DPO8TGv3Z4Q9zg08WhfoCQ";
 
     try {
       final response = await http.get(Uri.parse(url));
@@ -376,7 +405,7 @@ void _showDispatchNotification(Map<dynamic, dynamic> dispatch, String dispatchKe
       return;
     }
 
-    final accessToken = "your-mapbox-access-token"; // Replace with your Mapbox access token
+    final accessToken = "pk.eyJ1IjoieWhhbmllMTUiLCJhIjoiY2x5bHBrenB1MGxmczJpczYxbjRxbGxsYSJ9.DPO8TGv3Z4Q9zg08WhfoCQ"; // Replace with your Mapbox access token
     final url =
         "https://api.mapbox.com/directions/v5/mapbox/driving/${_currentLocation!.longitude},${_currentLocation!.latitude};${fireLocation!.longitude},${fireLocation!.latitude}?geometries=geojson&steps=true&access_token=pk.eyJ1IjoieWhhbmllMTUiLCJhIjoiY2x5bHBrenB1MGxmczJpczYxbjRxbGxsYSJ9.DPO8TGv3Z4Q9zg08WhfoCQ";
 
@@ -416,349 +445,417 @@ void _showDispatchNotification(Map<dynamic, dynamic> dispatch, String dispatchKe
     }
   }
 
-  void _checkNextTurn(Position position) {
-    if (routeSteps.isNotEmpty) {
-      final nextStep = routeSteps[0];
-      final nextLatLng = LatLng(
-        nextStep['maneuver']['location'][1],
-        nextStep['maneuver']['location'][0],
-      );
-      final distanceToNextTurn = Geolocator.distanceBetween(
-        position.latitude,
-        position.longitude,
-        nextLatLng.latitude,
-        nextLatLng.longitude,
-      );
 
-      setState(() {
-        currentInstruction = nextStep['maneuver']['instruction'];
-      });
-
-      if (distanceToNextTurn < 30.0) {
-        _tts.speak(currentInstruction);
-        routeSteps.removeAt(0);
-      }
-    }
-  }
 
   @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    key: _scaffoldKey,
-    backgroundColor: isAlerting && _isRedBackground ? Colors.red.withAlpha(128) : const Color.fromARGB(255, 30, 21, 21),
+  Widget build(BuildContext context) {
+    return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: isAlerting && _isRedBackground
+          ? Colors.red.withAlpha(128)
+          : const Color.fromARGB(255, 30, 21, 21),
     appBar: AppBar(
-      backgroundColor: const Color.fromARGB(255, 224, 51, 39),
-      title: const Text("SAGIP : SIKLAB"),
-      leading: IconButton(
-        icon: const Icon(Icons.menu),
-        onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.my_location),
-          onPressed: _recenterMap,
-        ),
-           
-      ],
-      
-    ),
-
-    
-   drawer: Drawer(
-  child: ListView(
-    children: [
-      const DrawerHeader(
-        decoration: BoxDecoration(color: Color.fromARGB(255, 241, 51, 37)),
-        child: Text(
-          "Navigation Menu",
-          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-      ),
-      ListTile(
-        leading: const Icon(Icons.person),
-        title: const Text("Profile"),
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const ProfileScreen(),
-            ),
-          );
-        },
-      ),
-      const Divider(),
-      ListTile(
-        leading: const Icon(Icons.history),
-        title: const Text("History"),
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const HistoryScreen(), // Navigate to the history screen
-            ),
-          );
-        },
-      ),
-      ListTile(
-        leading: const Icon(Icons.report),
-        title: const Text("Report"),
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const FireResolvedScreen(),
-            ),
-          );
-        },
-      ),
-      ListTile(
-        leading: const Icon(Icons.logout),
-        title: const Text("Logout"),
-        onTap: () async {
-          try {
-            await FirebaseAuth.instance.signOut();
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => const LoginScreen(),
-              ),
-            );
-          } catch (e) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("Logout failed: $e")),
-            );
-          }
-        },
-      ),
-    ],
-  ),
-),
-
-
-
-      body: Stack(
-  children: [
-    FlutterMap(
-      mapController: _mapController,
-      options: MapOptions(
-        initialCenter: _currentLocation ?? const LatLng(14.676041, 121.043700),
-        initialZoom: 16.0,
+  backgroundColor: const Color.fromARGB(255, 137, 17, 8),
+  title: RichText(
+    text: const TextSpan(
+      style: TextStyle(
+        fontSize: 25, // Adjust font size as needed
+        fontWeight: FontWeight.bold,
       ),
       children: [
-        TileLayer(
-          urlTemplate:
-              "https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoieWhhbmllMTUiLCJhIjoiY2x5bHBrenB1MGxmczJpczYxbjRxbGxsYSJ9.DPO8TGv3Z4Q9zg08WhfoCQ",
+        TextSpan(
+          text: 'SAGIP ',
+          style: TextStyle(color: Color.fromARGB(255, 210, 191, 15)),
         ),
-        
-        if (_currentLocation != null)
-          MarkerLayer(
-            markers: [
-              Marker(
-                point: _currentLocation!,
-                width: 80,
-                height: 80,
-                child: const Icon(Icons.location_pin, color: Colors.blue, size: 50),
-              ),
-              if (fireLocation != null)
-                Marker(
-                  point: fireLocation!,
-                  width: 80,
-                  height: 80,
-                  child: const Icon(Icons.local_fire_department, color: Colors.red, size: 50),
-                ),
-            ],
-          ),
-        if (routePoints.isNotEmpty)
-          PolylineLayer(
-            polylines: [
-              Polyline(points: routePoints, color: Colors.blue, strokeWidth: 5.0),
-            ],
-          ),
+      
+        TextSpan(
+          text: 'SIKLAB',
+          style: TextStyle(color: Color.fromARGB(255, 240, 82, 70)),
+        ),
       ],
-  
-    ),
-    
-  // Animated Siren Positioned
-    if (_isSirenVisible)
-      const Positioned(
-        top: 10, // Adjust position as needed
-        left: 0,
-        right: 0,
-        child: Center(
-          child: AnimatedSiren(), // Replace with your AnimatedSiren widget
-        ),
-      ),
-    // Slidable Button displayed at the top when `showSlidableButton` is true
-    if (showSlidableButton)
-      Positioned(
-        top: 10, // Adjust position to be at the top of the screen
-        left: 10,
-        right: 10,
-        child: Card(
-          elevation: 8.0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12.0),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-         child: HorizontalSlidableButton(
-  width: MediaQuery.of(context).size.width * 0.75,
-  buttonWidth: 60,
-  color: Colors.grey.shade300,
-  buttonColor: Colors.redAccent,
-  borderRadius: BorderRadius.circular(12),
-  label: const Center(
-    child: Text(
-      "Slide to Resolve Fire",
-      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
     ),
   ),
-  onChanged: (position) async {
-    if (position == SlidableButtonPosition.end) {
-      setState(() {
-        // Reset all variables to the initial state
-        fireLocation = null;
-        routePoints.clear();
-        isNavigating = false;
-        showSlidableButton = false;
-        showRoute = false;
-        distance = "";
-        duration = "";
-        currentInstruction = "";
-      });
-
-      try {
-        // Update the dispatch status to "resolved"
-        final DatabaseReference dispatchRef = FirebaseDatabase.instance.ref('dispatches');
-        final query = dispatchRef.orderByChild('rescuerID').equalTo(rescuerId);
-
-        final snapshot = await query.get();
-        if (snapshot.exists) {
-          Map<dynamic, dynamic>? dispatches = snapshot.value as Map?;
-          if (dispatches != null) {
-            for (var entry in dispatches.entries) {
-              if (entry.value['status'] == "dispatched") {
-                // Update the status to "resolved"
-                await dispatchRef.child(entry.key).update({'status': 'resolved'});
-                break; // Update only the first matching dispatch
-              }
-            }
-          }
-        }
-      } catch (e) {
-        // Handle any errors during the database update
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error updating status: $e")),
-        );
-      }
-
-      // Navigate to the Fire Resolved screen
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const FireResolvedScreen(), // Navigate to the fire resolved screen
-        ),
-      ).then((_) {
-        // Ensure the app returns to the initial state after coming back
-        setState(() {
-          fireLocation = null;
-          routePoints.clear();
-          isNavigating = false;
-          showSlidableButton = false;
-          showRoute = false;
-        });
-      });
-    }
-  },
+  leading: IconButton(
+    icon: const Icon(Icons.menu),
+    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+  ),
+  actions: [
+    IconButton(
+      icon: const Icon(Icons.my_location),
+      onPressed: _recenterMap,
+    ),
+  ],
 ),
 
-
-          ),
-        ),
-      ),
-
-    // Get Directions button
-    Positioned(
-      bottom: 20, // Positioned near the bottom of the screen
-      left: 20,
-      right: 20,
-      child: Card(
-        elevation: 8.0, // Shadow for the card
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12.0), // Rounded corners
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0), // Padding for spacing
-          child: ElevatedButton.icon(
-            onPressed: () async {
-              if (_currentLocation != null && fireLocation != null) {
-                final Uri googleMapsUri = Uri.parse(
-                  'https://www.google.com/maps/dir/?api=1'
-                  '&origin=${_currentLocation!.latitude},${_currentLocation!.longitude}'
-                  '&destination=${fireLocation!.latitude},${fireLocation!.longitude}'
-                  '&travelmode=driving'
-                  '&dir_action=navigate',
-                );
-
-                if (await canLaunchUrl(googleMapsUri)) {
-                  await launchUrl(
-                    googleMapsUri,
-                    mode: LaunchMode.externalApplication,
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Could not launch Google Maps')),
-                  );
-                }
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Location information is incomplete')),
-                );
-              }
-            },
-            icon: const Icon(Icons.directions), // Add a navigation icon
-            label: const Text(
-              "Get Directions",
-              style: TextStyle(fontSize: 16),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Color.fromARGB(255, 241, 51, 37), // Consistent theme color
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8.0), // Rounded corners for the button
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 12.0), // Increased button height
-            ),
-          ),
-        ),
-      ),
+      drawer: Drawer(
+        child: ListView(
+          children: [
+           DrawerHeader(
+  decoration: const BoxDecoration(
+    gradient: LinearGradient(
+      colors: [Color.fromARGB(255, 50, 4, 4), Color.fromARGB(255, 131, 23, 23)], // Gradient for a sleek design
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
     ),
+  ),
+  child: FutureBuilder(
+    future: FirebaseDatabase.instance
+        .ref('rescuer/${FirebaseAuth.instance.currentUser?.uid}')
+        .get(),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        );
+      } else if (snapshot.hasError) {
+        return const Center(
+          child: Text(
+            "Error fetching data",
+            style: TextStyle(color: Colors.white),
+          ),
+        );
+      } else if (snapshot.hasData && snapshot.data!.exists) {
+        final data = snapshot.data?.value as Map<dynamic, dynamic>;
+        final fireStationName = data['stationName'] ?? "Unknown Station";
 
-    // Navigation instructions (if navigating)
-    if (isNavigating)
-      Positioned(
-        top: 100,
-        left: 10,
-        right: 10,
-        child: Card(
-          color: Colors.white,
-          elevation: 5,
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Text(
-                  "Next Instruction: $currentInstruction",
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                Image.asset(
+                  'assets/logo.png', // Replace with your "logo.png" path
+                  height: 60,
+                  fit: BoxFit.cover,
                 ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text("Distance: $distance"),
-                    Text("Duration: $duration"),
-                  ],
+                const SizedBox(width: 10),
+                Image.asset(
+                  'assets/text.png', // Replace with your "text.png" path
+                  height: 30,
+                  fit: BoxFit.cover,
                 ),
               ],
             ),
+            const SizedBox(height: 20),
+            Text(
+              fireStationName, // Display dynamic fire station name
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        );
+      } else {
+        return const Center(
+          child: Text(
+            "No data available",
+            style: TextStyle(color: Colors.white),
           ),
+        );
+      }
+    },
+  ),
+),
+
+            ListTile(
+              leading: const Icon(Icons.person),
+              title: const Text("Profile"),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const ProfileScreen(),
+                  ),
+                );
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.history),
+              title: const Text("History"),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const HistoryScreen(), // Navigate to the history screen
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.report),
+              title: const Text("Report"),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const FireResolvedScreen(),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text("Logout"),
+              onTap: () async {
+                try {
+                  await FirebaseAuth.instance.signOut();
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (context) => const LoginScreen(),
+                    ),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Logout failed: $e")),
+                  );
+                }
+              },
+            ),
+          ],
         ),
       ),
-  ],
-),
-  );
-}
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: _currentLocation ??
+                  const LatLng(14.676041, 121.043700),
+              initialZoom: 16.0,
+            ),
+            children: [
+              TileLayer(
+                urlTemplate:
+                    "https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoieWhhbmllMTUiLCJhIjoiY2x5bHBrenB1MGxmczJpczYxbjRxbGxsYSJ9.DPO8TGv3Z4Q9zg08WhfoCQ",
+              ),
+              if (_currentLocation != null)
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: _currentLocation!,
+                      width: 80,
+                      height: 80,
+                      child: const Icon(Icons.location_pin,
+                          color: Colors.blue, size: 50),
+                    ),
+                    if (fireLocation != null)
+                      Marker(
+                        point: fireLocation!,
+                        width: 80,
+                        height: 80,
+                        child: const Icon(Icons.local_fire_department,
+                            color: Colors.red, size: 50),
+                      ),
+                  ],
+                ),
+              if (routePoints.isNotEmpty)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                        points: routePoints,
+                        color: Colors.blue,
+                        strokeWidth: 5.0),
+                  ],
+                ),
+            ],
+          ),
+          // Animated Siren Positioned
+          if (_isSirenVisible)
+            const Positioned(
+              top: 10, // Adjust position as needed
+              left: 0,
+              right: 0,
+              child: Center(
+                child: AnimatedSiren(), // Replace with your AnimatedSiren widget
+              ),
+            ),
+          // Slidable Button displayed at the top when showSlidableButton is true
+          if (showSlidableButton)
+            Positioned(
+              top: 10, // Adjust position to be at the top of the screen
+              left: 10,
+              right: 10,
+              child: Card(
+                elevation: 8.0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12.0),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: HorizontalSlidableButton(
+                    width: MediaQuery.of(context).size.width * 0.75,
+                    buttonWidth: 60,
+                    color: Colors.grey.shade300,
+                    buttonColor: Colors.redAccent,
+                    borderRadius: BorderRadius.circular(12),
+                    label: const Center(
+                      child: Text(
+                        "Slide to Resolve Fire",
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black),
+                      ),
+                    ),
+                    onChanged: (position) async {
+                      if (position == SlidableButtonPosition.end) {
+                        setState(() {
+                          // Reset all variables to the initial state
+                          fireLocation = null;
+                          routePoints.clear();
+                          isNavigating = false;
+                          showSlidableButton = false;
+                          showRoute = false;
+                          distance = "";
+                          duration = "";
+                          currentInstruction = "";
+                        });
+
+                        try {
+                          // Update the dispatch status to "resolved" using the centralized method
+                          final DatabaseReference dispatchRef =
+                              FirebaseDatabase.instance.ref('dispatches');
+                          final Query query = dispatchRef
+                              .orderByChild('rescuerID')
+                              .equalTo(rescuerId);
+
+                          final DataSnapshot snapshot = await query.get();
+                          if (snapshot.exists) {
+                            Map<dynamic, dynamic>? dispatches =
+                                snapshot.value as Map?;
+                            if (dispatches != null) {
+                              for (var entry in dispatches.entries) {
+                                if (entry.value['status'] == "Dispatched") {
+                                  // Use the centralized method to update status
+                                  await _updateDispatchStatus(
+                                      entry.key, 'Resolved');
+                                  break; // Update only the first matching dispatch
+                                }
+                              }
+                            }
+                          }
+                        } catch (e) {
+                          // Handle any errors during the database update
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Error updating status: $e")),
+                          );
+                        }
+
+                        // Navigate to the Fire Resolved screen
+                        Navigator.of(context)
+                            .push(
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const FireResolvedScreen(), // Navigate to the fire resolved screen
+                          ),
+                        )
+                            .then((_) {
+                          // Ensure the app returns to the initial state after coming back
+                          setState(() {
+                            fireLocation = null;
+                            routePoints.clear();
+                            isNavigating = false;
+                            showSlidableButton = false;
+                            showRoute = false;
+                          });
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ),
+          // Get Directions button
+          Positioned(
+            bottom: 20, // Positioned near the bottom of the screen
+            left: 20,
+            right: 20,
+            child: Card(
+              elevation: 8.0, // Shadow for the card
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.0), // Rounded corners
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0), // Padding for spacing
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    if (_currentLocation != null && fireLocation != null) {
+                      final Uri googleMapsUri = Uri.parse(
+                        'https://www.google.com/maps/dir/?api=1'
+                        '&origin=${_currentLocation!.latitude},${_currentLocation!.longitude}'
+                        '&destination=${fireLocation!.latitude},${fireLocation!.longitude}'
+                        '&travelmode=driving'
+                        '&dir_action=navigate',
+                      );
+
+                      if (await canLaunchUrl(googleMapsUri)) {
+                        await launchUrl(
+                          googleMapsUri,
+                          mode: LaunchMode.externalApplication,
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Could not launch Google Maps')),
+                        );
+                      }
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content:
+                                Text('Location information is incomplete')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.directions), // Add a navigation icon
+                  label: const Text(
+                    "Get Directions",
+                    style: TextStyle(fontSize: 16),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        const Color.fromARGB(255, 241, 51, 37), // Consistent theme color
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0), // Rounded corners for the button
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12.0), // Increased button height
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Navigation instructions (if navigating)
+          if (isNavigating)
+            Positioned(
+              top: 100,
+              left: 10,
+              right: 10,
+              child: Card(
+                color: Colors.white,
+                elevation: 5,
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    children: [
+                      Text(
+                        "Next Instruction: $currentInstruction",
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text("Distance: $distance"),
+                          Text("Duration: $duration"),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }

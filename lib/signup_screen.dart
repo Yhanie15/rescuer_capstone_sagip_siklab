@@ -19,7 +19,7 @@ const Map<String, List<String>> districtsAndBarangays = {
   'District 2': [
     'Bagong Silangan', 'Batasan Hills', 'Commonwealth', 'Holy Spirit', 'Payatas'
   ],
-  'District 3': [
+ 'District 3': [
     'Amihan', 'Bagumbayan', 'Bagumbuhay', 'Bayanihan', 'Blue Ridge A', 'Blue Ridge B',
     'Camp Aguinaldo', 'Claro', 'Dioquino Zobel', 'Duyan-duyan', 'E. Rodriguez',
     'East Kamias', 'Escopa 1', 'Escopa 2', 'Escopa 3', 'Escopa 4', 'Libis', 'Loyola Heights',
@@ -48,7 +48,6 @@ const Map<String, List<String>> districtsAndBarangays = {
   ],
 };
 
-
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
 
@@ -69,7 +68,9 @@ class SignupScreenState extends State<SignupScreen> {
 
   String? selectedDistrict;
   String? selectedBarangay;
-
+  double? selectedLatitude;
+  double? selectedLongitude;
+  
   bool isLoading = false;
 
   Future<void> openMapPicker() async {
@@ -98,6 +99,8 @@ class SignupScreenState extends State<SignupScreen> {
           setState(() {
             exactLocationController.text =
                 '${place.street}, ${place.locality}, ${place.administrativeArea}, ${place.country}';
+            selectedLatitude = pickedLocation.latitude;
+            selectedLongitude = pickedLocation.longitude;
           });
         }
       }
@@ -165,6 +168,8 @@ class SignupScreenState extends State<SignupScreen> {
         'assignedDistrict': selectedDistrict,
         'assignedBarangay': selectedBarangay,
         'exactLocation': exactLocationController.text.trim(),
+        'latitude': selectedLatitude,
+        'longitude': selectedLongitude,
         'createdAt': DateTime.now().toIso8601String(),
       });
 

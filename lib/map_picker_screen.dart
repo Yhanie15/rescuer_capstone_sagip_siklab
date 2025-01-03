@@ -16,9 +16,21 @@ class MapPickerScreen extends StatefulWidget {
 class _MapPickerScreenState extends State<MapPickerScreen> {
   late LatLng selectedPosition;
   TextEditingController searchController = TextEditingController();
-  final String mapboxAccessToken = "your-mapbox-access-token"; // Replace with your actual Mapbox access token
+  TextEditingController latController = TextEditingController();
+  TextEditingController lonController = TextEditingController();
+  final String mapboxAccessToken = "pk.eyJ1IjoieWhhbmllMTUiLCJhIjoiY2x5bHBrenB1MGxmczJpczYxbjRxbGxsYSJ9.DPO8TGv3Z4Q9zg08WhfoCQ"; // Replace with your actual Mapbox access token
   List<Map<String, dynamic>> searchResults = [];
   final MapController mapController = MapController(); // To control map movements
+
+  final Map<String, LatLng> predefinedLocations = {
+    "New York": LatLng(40.7128, -74.0060),
+    "Los Angeles": LatLng(34.0522, -118.2437),
+    "London": LatLng(51.5074, -0.1278),
+    "Tokyo": LatLng(35.6895, 139.6917),
+    "Sydney": LatLng(-33.8688, 151.2093),
+  };
+
+  String? selectedLocationName;
 
   @override
   void initState() {
@@ -30,7 +42,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
     if (query.isEmpty) return;
 
     final url =
-        "https://api.mapbox.com/geocoding/v5/mapbox.places/$query.json?access_token=pk.eyJ1IjoieWhhbmllMTUiLCJhIjoiY2x5bHBrenB1MGxmczJpczYxbjRxbGxsYSJ9.DPO8TGv3Z4Q9zg08WhfoCQ&limit=5";
+        "https://api.mapbox.com/geocoding/v5/mapbox.places/${Uri.encodeComponent(query)}.json?access_token=$mapboxAccessToken&limit=5";
 
     try {
       final response = await http.get(Uri.parse(url));
@@ -50,6 +62,23 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
       }
     } catch (e) {
       print("Error fetching location: $e");
+    }
+  }
+
+  void searchByCoordinates() {
+    final String latText = latController.text.trim();
+    final String lonText = lonController.text.trim();
+
+    if (latText.isEmpty || lonText.isEmpty) return;
+
+    try {
+      final double latitude = double.parse(latText);
+      final double longitude = double.parse(lonText);
+      moveToLocation(LatLng(latitude, longitude));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Invalid coordinates! Please enter valid numbers.")),
+      );
     }
   }
 
@@ -85,8 +114,8 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                subdomains: ['a', 'b', 'c'],
+                urlTemplate:
+                    "https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxAccessToken",
               ),
               MarkerLayer(
                 markers: [
@@ -139,6 +168,46 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
                       },
                     ),
                   ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: latController,
+                        decoration: InputDecoration(
+                          hintText: "Latitude",
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: TextField(
+                        controller: lonController,
+                        decoration: InputDecoration(
+                          hintText: "Longitude",
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    ElevatedButton(
+                      onPressed: searchByCoordinates,
+                      child: const Text("Go"),
+                    ),
+                  ],
+                ),
+               
               ],
             ),
           ),
