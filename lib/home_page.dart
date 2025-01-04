@@ -45,6 +45,7 @@ class _NavigationPageState extends State<NavigationPage> {
   StreamSubscription<Position>? _positionStream;
   StreamSubscription<DatabaseEvent>? _firebaseDispatchListener;
 
+  String? activeDispatchKey;
   String? rescuerId; // Dynamically fetched rescuerId
   String distance = "";
   String duration = "";
@@ -168,30 +169,42 @@ class _NavigationPageState extends State<NavigationPage> {
     _startLocationUpdates();
   }
 
-  void _startLocationUpdates() {
-    final locationOptions = LocationSettings(
-      accuracy: LocationAccuracy.bestForNavigation,
-      distanceFilter: 1,
-    );
+ void _startLocationUpdates() {
+  final locationOptions = LocationSettings(
+    accuracy: LocationAccuracy.bestForNavigation,
+    distanceFilter: 1,
+  );
 
-    _positionStream = Geolocator.getPositionStream(locationSettings: locationOptions).listen(
-      (Position position) {
-        final LatLng newLocation = LatLng(position.latitude, position.longitude);
+  _positionStream = Geolocator.getPositionStream(locationSettings: locationOptions).listen(
+    (Position position) {
+      final LatLng newLocation = LatLng(position.latitude, position.longitude);
 
-        setState(() {
-          _currentLocation = newLocation;
-          if (isNavigating) {
-            _mapController.move(newLocation, 16.0);
-          }
+      setState(() {
+        _currentLocation = newLocation;
+        if (isNavigating) {
+          _mapController.move(newLocation, 16.0);
+        }
+      });
+
+      // Automatically update real-time location in Firebase
+      if (activeDispatchKey != null) {
+        FirebaseDatabase.instance
+            .ref('dispatches/$activeDispatchKey/realTimeLocation')
+            .set({
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+        }).catchError((error) {
+          print("Error updating realTimeLocation: $error");
         });
+      }
+    },
+    onError: (e) {
+      print("Error fetching location: $e");
+    },
+  );
+}
 
-       
-      },
-      onError: (e) {
-        print("Error fetching location: $e");
-      },
-    );
-  }
+
 
   void _listenForDispatchUpdates() {
     if (rescuerId == null) {
@@ -287,22 +300,30 @@ class _NavigationPageState extends State<NavigationPage> {
       actions: [
         ElevatedButton(
           onPressed: () async {
-            _stopSirenAnimation();
-            _stopSoundAlert(); // Stop sound
-            _stopBlinkingBackground(); // Stop blinking background
-            await _updateDispatchStatus(dispatchKey, "Dispatched"); // Update dispatch status
+  setState(() {
+    activeDispatchKey = dispatchKey; // Assign the active dispatch key
+  });
 
-            Navigator.of(context).pop(); // Close the dialog
+  _stopSirenAnimation();
+  _stopSoundAlert(); // Stop sound
+  _stopBlinkingBackground(); // Stop blinking background
+  await _updateDispatchStatus(dispatchKey, "Dispatched"); // Update dispatch status
 
-            // Show route and slidable button
-            setState(() {
-              isNavigating = true; // Show the route
-              showSlidableButton = true; // Show the slidable button
-            });
+  Navigator.of(context).pop(); // Close the dialog
 
-            // Fetch and display the route
-            await _setFireLocation(location);
-          },
+  // Show route and slidable button
+  setState(() {
+    isNavigating = true; // Start navigation
+    showSlidableButton = true; // Show the slidable button
+  });
+
+  // Start real-time location updates
+  _startLocationUpdates();
+
+  // Fetch and display the route
+  await _setFireLocation(location);
+},
+
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -317,6 +338,7 @@ class _NavigationPageState extends State<NavigationPage> {
         ),
         ElevatedButton(
           onPressed: () async {
+           
             _stopSirenAnimation();
             _stopSoundAlert(); // Stop sound
             _stopBlinkingBackground(); // Stop blinking background
@@ -477,7 +499,7 @@ class _NavigationPageState extends State<NavigationPage> {
            DrawerHeader(
   decoration: const BoxDecoration(
     gradient: LinearGradient(
-      colors: [Color(0xFFB71C1C), Color(0xFFD32F2F)], // Gradient for a sleek design
+      colors: [Color.fromARGB(255, 87, 17, 17), Color.fromARGB(255, 158, 40, 40)], // Gradient for a sleek design
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
@@ -509,10 +531,10 @@ class _NavigationPageState extends State<NavigationPage> {
               children: [
                 Image.asset(
                   'assets/logo.png', // Replace with your "logo.png" path
-                  height: 60,
+                  height: 70,
                   fit: BoxFit.cover,
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 0),
                 Image.asset(
                   'assets/text.png', // Replace with your "text.png" path
                   height: 30,
@@ -667,85 +689,85 @@ class _NavigationPageState extends State<NavigationPage> {
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: HorizontalSlidableButton(
-                    width: MediaQuery.of(context).size.width * 0.75,
-                    buttonWidth: 60,
-                    color: Colors.grey.shade300,
-                    buttonColor: Colors.redAccent,
-                    borderRadius: BorderRadius.circular(12),
-                    label: const Center(
-                      child: Text(
-                        "Slide to Resolve Fire",
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black),
-                      ),
-                    ),
-                    onChanged: (position) async {
-                      if (position == SlidableButtonPosition.end) {
-                        setState(() {
-                          // Reset all variables to the initial state
-                          fireLocation = null;
-                          routePoints.clear();
-                          isNavigating = false;
-                          showSlidableButton = false;
-                          showRoute = false;
-                          distance = "";
-                          duration = "";
-                          currentInstruction = "";
-                        });
+  width: MediaQuery.of(context).size.width * 0.75,
+  buttonWidth: 60,
+  color: Colors.grey.shade300,
+  buttonColor: Colors.redAccent,
+  borderRadius: BorderRadius.circular(12),
+  label: const Center(
+    child: Text(
+      "Slide to Resolve Fire",
+      style: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: Colors.black,
+      ),
+    ),
+  ),
+  onChanged: (position) async {
+    if (position == SlidableButtonPosition.end) {
+      // Stop location updates
+      _positionStream?.cancel();
 
-                        try {
-                          // Update the dispatch status to "resolved" using the centralized method
-                          final DatabaseReference dispatchRef =
-                              FirebaseDatabase.instance.ref('dispatches');
-                          final Query query = dispatchRef
-                              .orderByChild('rescuerID')
-                              .equalTo(rescuerId);
+      // Remove real-time location from Firebase
+      if (activeDispatchKey != null) {
+        FirebaseDatabase.instance
+            .ref('dispatches/$activeDispatchKey/realTimeLocation')
+            .remove()
+            .then((_) => print("Real-time location removed successfully"))
+            .catchError((error) {
+          print("Error removing realTimeLocation: $error");
+        });
+      }
 
-                          final DataSnapshot snapshot = await query.get();
-                          if (snapshot.exists) {
-                            Map<dynamic, dynamic>? dispatches =
-                                snapshot.value as Map?;
-                            if (dispatches != null) {
-                              for (var entry in dispatches.entries) {
-                                if (entry.value['status'] == "Dispatched") {
-                                  // Use the centralized method to update status
-                                  await _updateDispatchStatus(
-                                      entry.key, 'Resolved');
-                                  break; // Update only the first matching dispatch
-                                }
-                              }
-                            }
-                          }
-                        } catch (e) {
-                          // Handle any errors during the database update
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Error updating status: $e")),
-                          );
-                        }
+      setState(() {
+        // Reset variables
+        fireLocation = null;
+        routePoints.clear();
+        isNavigating = false;
+        showSlidableButton = false;
+        showRoute = false;
+        distance = "";
+        duration = "";
+        currentInstruction = "";
+        activeDispatchKey = null; // Clear active dispatch key
+      });
 
-                        // Navigate to the Fire Resolved screen
-                        Navigator.of(context)
-                            .push(
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                const FireResolvedScreen(), // Navigate to the fire resolved screen
-                          ),
-                        )
-                            .then((_) {
-                          // Ensure the app returns to the initial state after coming back
-                          setState(() {
-                            fireLocation = null;
-                            routePoints.clear();
-                            isNavigating = false;
-                            showSlidableButton = false;
-                            showRoute = false;
-                          });
-                        });
-                      }
-                    },
-                  ),
+      try {
+        // Update dispatch status to "Resolved"
+        final DatabaseReference dispatchRef =
+            FirebaseDatabase.instance.ref('dispatches');
+        final Query query = dispatchRef.orderByChild('rescuerID').equalTo(rescuerId);
+
+        final DataSnapshot snapshot = await query.get();
+        if (snapshot.exists) {
+          Map<dynamic, dynamic>? dispatches = snapshot.value as Map?;
+          if (dispatches != null) {
+            for (var entry in dispatches.entries) {
+              if (entry.value['status'] == "Dispatched") {
+                await _updateDispatchStatus(entry.key, 'Resolved');
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        print("Error updating dispatch status: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error updating status: $e")),
+        );
+      }
+
+      // Navigate to the Fire Resolved screen
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const FireResolvedScreen(),
+        ),
+      );
+    }
+  },
+),
+
                 ),
               ),
             ),

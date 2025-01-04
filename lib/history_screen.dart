@@ -71,7 +71,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.redAccent,
+        backgroundColor: const Color.fromARGB(255, 229, 229, 229),
         title: const Text("My Dispatch History"),
       ),
       body: _isLoading

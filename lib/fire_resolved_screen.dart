@@ -151,7 +151,7 @@ class _FireResolvedScreenState extends State<FireResolvedScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.redAccent,
+        backgroundColor: const Color.fromARGB(255, 229, 229, 229),
         title: const Text("Fire Resolved - Fill Out Form"),
       ),
       body: SingleChildScrollView(
