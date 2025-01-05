@@ -55,7 +55,8 @@ dependencies:
   audioplayers: ^6.1.0
   slidable_button: ^3.0.0+1
   image_picker: ^1.1.2
-
+  shared_preferences: ^2.3.5
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter

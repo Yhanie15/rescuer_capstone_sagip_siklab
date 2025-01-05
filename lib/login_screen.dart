@@ -1,8 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'signup_screen.dart';
-import 'home_page.dart'; // Import the home page
+import 'home_page.dart'; // Import the NavigationPage widget
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,6 +18,24 @@ class LoginScreenState extends State<LoginScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseDatabase _database = FirebaseDatabase.instance;
   bool isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkIfLoggedIn(); // Check if user is already logged in
+  }
+
+  Future<void> _checkIfLoggedIn() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+
+    if (isLoggedIn && _auth.currentUser != null) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const NavigationPage()),
+      );
+    }
+  }
 
   // Sign in with email and password
   Future<void> signInUser() async {
@@ -41,6 +60,10 @@ class LoginScreenState extends State<LoginScreen> {
         final String rescuerStatus = data['rescuer_status'] ?? 'Pending';
 
         if (rescuerStatus == 'Approved') {
+          // Save login state
+          final SharedPreferences prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('isLoggedIn', true);
+
           // Navigate to HomePage if approved
           Navigator.pushReplacement(
             context,
