@@ -19,7 +19,7 @@ const Map<String, List<String>> districtsAndBarangays = {
   'District 2': [
     'Bagong Silangan', 'Batasan Hills', 'Commonwealth', 'Holy Spirit', 'Payatas'
   ],
- 'District 3': [
+  'District 3': [
     'Amihan', 'Bagumbayan', 'Bagumbuhay', 'Bayanihan', 'Blue Ridge A', 'Blue Ridge B',
     'Camp Aguinaldo', 'Claro', 'Dioquino Zobel', 'Duyan-duyan', 'E. Rodriguez',
     'East Kamias', 'Escopa 1', 'Escopa 2', 'Escopa 3', 'Escopa 4', 'Libis', 'Loyola Heights',
@@ -70,7 +70,7 @@ class SignupScreenState extends State<SignupScreen> {
   String? selectedBarangay;
   double? selectedLatitude;
   double? selectedLongitude;
-  
+
   bool isLoading = false;
 
   Future<void> openMapPicker() async {
@@ -170,6 +170,7 @@ class SignupScreenState extends State<SignupScreen> {
         'exactLocation': exactLocationController.text.trim(),
         'latitude': selectedLatitude,
         'longitude': selectedLongitude,
+        'rescuer_status': 'pending', // Admin approval
         'createdAt': DateTime.now().toIso8601String(),
       });
 

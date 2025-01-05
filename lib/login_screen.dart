@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'signup_screen.dart';
 import 'home_page.dart'; // Import the home page
@@ -14,6 +15,7 @@ class LoginScreenState extends State<LoginScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseDatabase _database = FirebaseDatabase.instance;
   bool isLoading = false;
 
   // Sign in with email and password
@@ -24,19 +26,90 @@ class LoginScreenState extends State<LoginScreen> {
 
     try {
       // Attempt to sign in the user
-      await _auth.signInWithEmailAndPassword(
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
 
-      // Navigate to HomePage after successful login
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const NavigationPage()),
-      );
+      // Fetch user's rescuer_status from Firebase
+      final DatabaseReference rescuerRef =
+          _database.ref("rescuer/${userCredential.user!.uid}");
+      final DataSnapshot snapshot = await rescuerRef.get();
+
+      if (snapshot.exists) {
+        final data = snapshot.value as Map<dynamic, dynamic>;
+        final String rescuerStatus = data['rescuer_status'] ?? 'Pending';
+
+        if (rescuerStatus == 'Approved') {
+          // Navigate to HomePage if approved
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const NavigationPage()),
+          );
+        } else if (rescuerStatus == 'Pending') {
+          // Show approval pending message
+          showDialog(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                title: const Text('Approval Pending'),
+                content: const Text(
+                    'Your account is awaiting admin approval. Please try again later.'),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text('OK'),
+                  ),
+                ],
+              );
+            },
+          );
+        } else if (rescuerStatus == 'Rejected') {
+          // Show rejected account message
+          showDialog(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                title: const Text('Account Rejected'),
+                content: const Text(
+                    'Your account has been rejected. Please contact the administrator for more details.'),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text('OK'),
+                  ),
+                ],
+              );
+            },
+          );
+        }
+      } else {
+        // User not found in rescuer node
+        showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('Error'),
+              content: const Text('Account data not found.'),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('OK'),
+                ),
+              ],
+            );
+          },
+        );
+      }
     } catch (e) {
-      print(e);
       // Show error message if login fails
+      print(e);
       showDialog(
         context: context,
         builder: (BuildContext context) {
@@ -76,8 +149,7 @@ class LoginScreenState extends State<LoginScreen> {
                 alignment: Alignment.center,
                 child: Column(
                   children: [
-                    // Lowering the logo placement by adjusting the SizedBox height
-                    const SizedBox(height: 40), // Add space before the logo to lower its placement
+                    const SizedBox(height: 40), // Add space before the logo
                     Image.asset('assets/logo.png', height: 120), // Logo from assets
                     const SizedBox(height: 20),
                     Image.asset('assets/text.png', height: 30), // Text logo from assets

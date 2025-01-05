@@ -169,12 +169,29 @@ class _NavigationPageState extends State<NavigationPage> {
     _startLocationUpdates();
   }
 
- void _startLocationUpdates() {
+ void _startLocationUpdates() async {
   final locationOptions = LocationSettings(
     accuracy: LocationAccuracy.bestForNavigation,
     distanceFilter: 1,
   );
 
+  // Fetch the fire station name from Firebase
+  final rescuerId = FirebaseAuth.instance.currentUser?.uid;
+  String fireStationName = "Unknown Station"; // Default value
+  if (rescuerId != null) {
+    try {
+      final snapshot = await FirebaseDatabase.instance
+          .ref('rescuer/$rescuerId/stationName')
+          .get();
+      if (snapshot.exists) {
+        fireStationName = snapshot.value.toString();
+      }
+    } catch (e) {
+      print("Error fetching fire station name: $e");
+    }
+  }
+
+  // Start listening to location updates
   _positionStream = Geolocator.getPositionStream(locationSettings: locationOptions).listen(
     (Position position) {
       final LatLng newLocation = LatLng(position.latitude, position.longitude);
@@ -186,7 +203,21 @@ class _NavigationPageState extends State<NavigationPage> {
         }
       });
 
-      // Automatically update real-time location in Firebase
+      // Update rescuer_realtime_location in Firebase
+      if (rescuerId != null) {
+        FirebaseDatabase.instance
+            .ref('rescuer_realtime_location/$fireStationName/$rescuerId')
+            .set({
+          'rescuerID': rescuerId, // Add rescuerID to the structure
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'timestamp': DateTime.now().toIso8601String(),
+        }).catchError((error) {
+          print("Error updating rescuer real-time location: $error");
+        });
+      }
+
+      // If there's an active dispatch, also update realTimeLocation
       if (activeDispatchKey != null) {
         FirebaseDatabase.instance
             .ref('dispatches/$activeDispatchKey/realTimeLocation')
@@ -194,7 +225,7 @@ class _NavigationPageState extends State<NavigationPage> {
           'latitude': position.latitude,
           'longitude': position.longitude,
         }).catchError((error) {
-          print("Error updating realTimeLocation: $error");
+          print("Error updating realTimeLocation for active dispatch: $error");
         });
       }
     },
@@ -202,6 +233,62 @@ class _NavigationPageState extends State<NavigationPage> {
       print("Error fetching location: $e");
     },
   );
+}
+
+
+Future<void> _logoutRescuer() async {
+  try {
+    final rescuerId = FirebaseAuth.instance.currentUser?.uid;
+    if (rescuerId != null) {
+      // Fetch the fire station name
+      String fireStationName = "Unknown Station";
+      try {
+        final snapshot = await FirebaseDatabase.instance
+            .ref('rescuer/$rescuerId/stationName')
+            .get();
+        if (snapshot.exists) {
+          fireStationName = snapshot.value.toString();
+        }
+      } catch (e) {
+        print("Error fetching fire station name during logout: $e");
+      }
+
+      // Remove the rescuer's entry from rescuer_realtime_location
+      await FirebaseDatabase.instance
+          .ref('rescuer_realtime_location/$fireStationName/$rescuerId')
+          .remove()
+          .then((_) => print("Rescuer's real-time location removed successfully"))
+          .catchError((error) {
+        print("Error removing rescuer's real-time location: $error");
+      });
+
+      // Remove realTimeLocation for active dispatch
+      if (activeDispatchKey != null) {
+        await FirebaseDatabase.instance
+            .ref('dispatches/$activeDispatchKey/realTimeLocation')
+            .remove()
+            .then((_) => print("Real-time location for dispatch removed successfully"))
+            .catchError((error) {
+          print("Error removing real-time location for dispatch: $error");
+        });
+      }
+    }
+
+    // Stop location updates
+    _positionStream?.cancel();
+
+    // Sign out from Firebase Auth
+    await FirebaseAuth.instance.signOut();
+
+    // Navigate to login screen
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Logout failed: $e")),
+    );
+  }
 }
 
 
@@ -319,9 +406,7 @@ class _NavigationPageState extends State<NavigationPage> {
 
   // Start real-time location updates
   _startLocationUpdates();
-
-  // Fetch and display the route
-  await _setFireLocation(location);
+  await _fetchFireLocation(dispatchKey);
 },
 
           style: ElevatedButton.styleFrom(
@@ -365,7 +450,7 @@ class _NavigationPageState extends State<NavigationPage> {
 
   /// Updates the status of a dispatch in the 'dispatches' table and
   /// ensures that the corresponding 'reports_image' entries inherit the same status.
-  Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
+Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
   try {
     // Update the status in the 'dispatches' table
     final DatabaseReference dispatchRef =
@@ -373,26 +458,44 @@ class _NavigationPageState extends State<NavigationPage> {
     await dispatchRef.update({"status": status});
     print("Dispatch $dispatchKey status updated to $status.");
 
-    // Now, update the 'reports_image' table
+    // Update the status in the 'Calls' table
+    final DatabaseReference callsRef =
+        FirebaseDatabase.instance.ref('Calls');
+    final Query callsQuery = callsRef.orderByChild('dispatchID').equalTo(dispatchKey);
+
+    final DatabaseEvent callsSnapshot = await callsQuery.once();
+
+    if (callsSnapshot.snapshot.exists) {
+      final Map<dynamic, dynamic> callsData = callsSnapshot.snapshot.value as Map<dynamic, dynamic>;
+
+      for (var callKey in callsData.keys) {
+        await callsRef.child(callKey).update({"status": status});
+        print("Call entry $callKey status updated to $status.");
+      }
+    } else {
+      print("No Calls entries found for dispatchID: $dispatchKey.");
+    }
+
+    // Update the status in the 'reports_image' table
     final DatabaseReference reportsImageRef =
         FirebaseDatabase.instance.ref('reports_image');
 
-    // Query 'reports_image' entries where 'dispatchID' equals 'dispatchKey'
-    final Query query = reportsImageRef.orderByChild('dispatchID').equalTo(dispatchKey);
-    final DatabaseEvent snapshot = await query.once();
+    final Query reportQuery = reportsImageRef.orderByChild('dispatchID').equalTo(dispatchKey);
+    final DatabaseEvent reportSnapshot = await reportQuery.once();
 
-    final data = snapshot.snapshot.value as Map<dynamic, dynamic>?;
-    if (data != null) {
-      for (var key in data.keys) {
-        await reportsImageRef.child(key).update({"status": status});
-        print("reports_image entry $key status updated to $status.");
+    if (reportSnapshot.snapshot.exists) {
+      final Map<dynamic, dynamic> reportsData = reportSnapshot.snapshot.value as Map<dynamic, dynamic>;
+
+      for (var reportKey in reportsData.keys) {
+        await reportsImageRef.child(reportKey).update({"status": status});
+        print("Report entry $reportKey status updated to $status.");
       }
     } else {
       print("No reports_image entries found for dispatchID: $dispatchKey.");
-      // Optionally, notify the user or take alternative actions
     }
+
   } catch (e) {
-    print("Error updating dispatch and reports_image status: $e");
+    print("Error updating dispatch and related data: $e");
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Error updating status: $e")),
     );
@@ -401,28 +504,40 @@ class _NavigationPageState extends State<NavigationPage> {
 
 
 
-  Future<void> _setFireLocation(String location) async {
-    final accessToken = "your-mapbox-access-token"; // Replace with your Mapbox access token
-    final url =
-        "https://api.mapbox.com/geocoding/v5/mapbox.places/${Uri.encodeComponent(location)}.json?access_token=pk.eyJ1IjoieWhhbmllMTUiLCJhIjoiY2x5bHBrenB1MGxmczJpczYxbjRxbGxsYSJ9.DPO8TGv3Z4Q9zg08WhfoCQ";
+ Future<void> _fetchFireLocation(String dispatchKey) async {
+  try {
+    // Reference the specific dispatch in Firebase
+    final DatabaseReference dispatchRef =
+        FirebaseDatabase.instance.ref('dispatches/$dispatchKey');
 
-    try {
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final coordinates = data['features'][0]['geometry']['coordinates'];
-        setState(() {
-          fireLocation = LatLng(coordinates[1], coordinates[0]);
-          _mapController.move(fireLocation!, 16.0);
-        });
-        await _fetchRouteToFire();
-      } else {
-        print("Failed to fetch fire location: ${response.statusCode}");
-      }
-    } catch (e) {
-      print("Error fetching fire location: $e");
+    final DataSnapshot snapshot = await dispatchRef.get();
+
+    if (snapshot.exists) {
+      final data = snapshot.value as Map<dynamic, dynamic>;
+
+      // Extract latitude and longitude from Firebase
+      final double latitude = double.parse(data['latitude'].toString());
+      final double longitude = double.parse(data['longitude'].toString());
+
+      setState(() {
+        fireLocation = LatLng(latitude, longitude); // Set the fire location
+      });
+
+      // Center the map on the fire location
+      _mapController.move(fireLocation!, 16.0);
+
+      print("Fire Location: Latitude: $latitude, Longitude: $longitude");
+
+      // Fetch and display route to fire
+      await _fetchRouteToFire();
+    } else {
+      print("No data found for dispatchKey: $dispatchKey");
     }
+  } catch (e) {
+    print("Error fetching fire location from Firebase: $e");
   }
+}
+
 
   Future<void> _fetchRouteToFire() async {
     if (_currentLocation == null || fireLocation == null) {
@@ -615,6 +730,7 @@ class _NavigationPageState extends State<NavigationPage> {
                     SnackBar(content: Text("Logout failed: $e")),
                   );
                 }
+                await _logoutRescuer();
               },
             ),
           ],
@@ -705,67 +821,68 @@ class _NavigationPageState extends State<NavigationPage> {
     ),
   ),
   onChanged: (position) async {
-    if (position == SlidableButtonPosition.end) {
-      // Stop location updates
-      _positionStream?.cancel();
+  if (position == SlidableButtonPosition.end) {
+    // Stop location updates
+    _positionStream?.cancel();
 
-      // Remove real-time location from Firebase
-      if (activeDispatchKey != null) {
-        FirebaseDatabase.instance
-            .ref('dispatches/$activeDispatchKey/realTimeLocation')
-            .remove()
-            .then((_) => print("Real-time location removed successfully"))
-            .catchError((error) {
-          print("Error removing realTimeLocation: $error");
-        });
-      }
-
-      setState(() {
-        // Reset variables
-        fireLocation = null;
-        routePoints.clear();
-        isNavigating = false;
-        showSlidableButton = false;
-        showRoute = false;
-        distance = "";
-        duration = "";
-        currentInstruction = "";
-        activeDispatchKey = null; // Clear active dispatch key
+    // Remove real-time location from Firebase
+    if (activeDispatchKey != null) {
+      FirebaseDatabase.instance
+          .ref('dispatches/$activeDispatchKey/realTimeLocation')
+          .remove()
+          .then((_) => print("Real-time location removed successfully"))
+          .catchError((error) {
+        print("Error removing realTimeLocation: $error");
       });
+    }
 
-      try {
-        // Update dispatch status to "Resolved"
-        final DatabaseReference dispatchRef =
-            FirebaseDatabase.instance.ref('dispatches');
-        final Query query = dispatchRef.orderByChild('rescuerID').equalTo(rescuerId);
+    setState(() {
+      // Reset variables
+      fireLocation = null;
+      routePoints.clear();
+      isNavigating = false;
+      showSlidableButton = false;
+      showRoute = false;
+      distance = "";
+      duration = "";
+      currentInstruction = "";
+      activeDispatchKey = null; // Clear active dispatch key
+    });
 
-        final DataSnapshot snapshot = await query.get();
-        if (snapshot.exists) {
-          Map<dynamic, dynamic>? dispatches = snapshot.value as Map?;
-          if (dispatches != null) {
-            for (var entry in dispatches.entries) {
-              if (entry.value['status'] == "Dispatched") {
-                await _updateDispatchStatus(entry.key, 'Resolved');
-                break;
-              }
+    try {
+      // Update dispatch status to "Resolved"
+      final DatabaseReference dispatchRef =
+          FirebaseDatabase.instance.ref('dispatches');
+      final Query query = dispatchRef.orderByChild('rescuerID').equalTo(rescuerId);
+
+      final DataSnapshot snapshot = await query.get();
+      if (snapshot.exists) {
+        Map<dynamic, dynamic>? dispatches = snapshot.value as Map?;
+        if (dispatches != null) {
+          for (var entry in dispatches.entries) {
+            if (entry.value['status'] == "Dispatched") {
+              await _updateDispatchStatus(entry.key, 'Resolved'); // Send Resolved status
+              break;
             }
           }
         }
-      } catch (e) {
-        print("Error updating dispatch status: $e");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error updating status: $e")),
-        );
       }
-
-      // Navigate to the Fire Resolved screen
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const FireResolvedScreen(),
-        ),
+    } catch (e) {
+      print("Error updating dispatch status: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error updating status: $e")),
       );
     }
-  },
+
+    // Navigate to the Fire Resolved screen
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const FireResolvedScreen(),
+      ),
+    );
+  }
+},
+
 ),
 
                 ),
