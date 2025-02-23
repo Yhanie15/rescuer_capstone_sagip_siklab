@@ -1,4 +1,3 @@
-
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -17,6 +16,7 @@ import 'animated_siren.dart';
 import 'package:slidable_button/slidable_button.dart';
 import 'fire_resolved_screen.dart';
 import 'history_screen.dart';
+import 'firefighter_list_screen.dart'; // Add this import
 
 class NavigationPage extends StatefulWidget {
   const NavigationPage({super.key});
@@ -73,7 +73,8 @@ class _NavigationPageState extends State<NavigationPage> {
 
   Future<void> _playSoundAlert() async {
     await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-    await _audioPlayer.play(AssetSource('alert.mp3')); // Add alert.mp3 to assets
+    await _audioPlayer
+        .play(AssetSource('alert.mp3')); // Add alert.mp3 to assets
   }
 
   Future<void> _stopSoundAlert() async {
@@ -113,7 +114,8 @@ class _NavigationPageState extends State<NavigationPage> {
   }
 
   void _triggerDispatchAlert() {
-    if (!isAlerting) { // Check if not already alerting
+    if (!isAlerting) {
+      // Check if not already alerting
       _playSoundAlert();
       _startBlinkingBackground();
       _startSirenAnimation();
@@ -161,7 +163,8 @@ class _NavigationPageState extends State<NavigationPage> {
 
     if (permission == LocationPermission.deniedForever) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location permissions are permanently denied')),
+        const SnackBar(
+            content: Text('Location permissions are permanently denied')),
       );
       return;
     }
@@ -169,79 +172,16 @@ class _NavigationPageState extends State<NavigationPage> {
     _startLocationUpdates();
   }
 
- void _startLocationUpdates() async {
-  final locationOptions = LocationSettings(
-    accuracy: LocationAccuracy.bestForNavigation,
-    distanceFilter: 1,
-  );
+  void _startLocationUpdates() async {
+    const locationOptions = LocationSettings(
+      accuracy: LocationAccuracy.bestForNavigation,
+      distanceFilter: 1,
+    );
 
-  // Fetch the fire station name from Firebase
-  final rescuerId = FirebaseAuth.instance.currentUser?.uid;
-  String fireStationName = "Unknown Station"; // Default value
-  if (rescuerId != null) {
-    try {
-      final snapshot = await FirebaseDatabase.instance
-          .ref('rescuer/$rescuerId/stationName')
-          .get();
-      if (snapshot.exists) {
-        fireStationName = snapshot.value.toString();
-      }
-    } catch (e) {
-      print("Error fetching fire station name: $e");
-    }
-  }
-
-  // Start listening to location updates
-  _positionStream = Geolocator.getPositionStream(locationSettings: locationOptions).listen(
-    (Position position) {
-      final LatLng newLocation = LatLng(position.latitude, position.longitude);
-
-      setState(() {
-        _currentLocation = newLocation;
-        if (isNavigating) {
-          _mapController.move(newLocation, 16.0);
-        }
-      });
-
-      // Update rescuer_realtime_location in Firebase
-      if (rescuerId != null) {
-        FirebaseDatabase.instance
-            .ref('rescuer_realtime_location/$fireStationName/$rescuerId')
-            .set({
-          'rescuerID': rescuerId, // Add rescuerID to the structure
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-          'timestamp': DateTime.now().toIso8601String(),
-        }).catchError((error) {
-          print("Error updating rescuer real-time location: $error");
-        });
-      }
-
-      // If there's an active dispatch, also update realTimeLocation
-      if (activeDispatchKey != null) {
-        FirebaseDatabase.instance
-            .ref('dispatches/$activeDispatchKey/realTimeLocation')
-            .set({
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-        }).catchError((error) {
-          print("Error updating realTimeLocation for active dispatch: $error");
-        });
-      }
-    },
-    onError: (e) {
-      print("Error fetching location: $e");
-    },
-  );
-}
-
-
-Future<void> _logoutRescuer() async {
-  try {
+    // Fetch the fire station name from Firebase
     final rescuerId = FirebaseAuth.instance.currentUser?.uid;
+    String fireStationName = "Unknown Station"; // Default value
     if (rescuerId != null) {
-      // Fetch the fire station name
-      String fireStationName = "Unknown Station";
       try {
         final snapshot = await FirebaseDatabase.instance
             .ref('rescuer/$rescuerId/stationName')
@@ -250,48 +190,113 @@ Future<void> _logoutRescuer() async {
           fireStationName = snapshot.value.toString();
         }
       } catch (e) {
-        print("Error fetching fire station name during logout: $e");
-      }
-
-      // Remove the rescuer's entry from rescuer_realtime_location
-      await FirebaseDatabase.instance
-          .ref('rescuer_realtime_location/$fireStationName/$rescuerId')
-          .remove()
-          .then((_) => print("Rescuer's real-time location removed successfully"))
-          .catchError((error) {
-        print("Error removing rescuer's real-time location: $error");
-      });
-
-      // Remove realTimeLocation for active dispatch
-      if (activeDispatchKey != null) {
-        await FirebaseDatabase.instance
-            .ref('dispatches/$activeDispatchKey/realTimeLocation')
-            .remove()
-            .then((_) => print("Real-time location for dispatch removed successfully"))
-            .catchError((error) {
-          print("Error removing real-time location for dispatch: $error");
-        });
+        print("Error fetching fire station name: $e");
       }
     }
 
-    // Stop location updates
-    _positionStream?.cancel();
+    // Start listening to location updates
+    _positionStream =
+        Geolocator.getPositionStream(locationSettings: locationOptions).listen(
+      (Position position) {
+        final LatLng newLocation =
+            LatLng(position.latitude, position.longitude);
 
-    // Sign out from Firebase Auth
-    await FirebaseAuth.instance.signOut();
+        setState(() {
+          _currentLocation = newLocation;
+          if (isNavigating) {
+            _mapController.move(newLocation, 16.0);
+          }
+        });
 
-    // Navigate to login screen
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-    );
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Logout failed: $e")),
+        // Update rescuer_realtime_location in Firebase
+        if (rescuerId != null) {
+          FirebaseDatabase.instance
+              .ref('rescuer_realtime_location/$fireStationName/$rescuerId')
+              .set({
+            'rescuerID': rescuerId, // Add rescuerID to the structure
+            'latitude': position.latitude,
+            'longitude': position.longitude,
+            'timestamp': DateTime.now().toIso8601String(),
+          }).catchError((error) {
+            print("Error updating rescuer real-time location: $error");
+          });
+        }
+
+        // If there's an active dispatch, also update realTimeLocation
+        if (activeDispatchKey != null) {
+          FirebaseDatabase.instance
+              .ref('dispatches/$activeDispatchKey/realTimeLocation')
+              .set({
+            'latitude': position.latitude,
+            'longitude': position.longitude,
+          }).catchError((error) {
+            print(
+                "Error updating realTimeLocation for active dispatch: $error");
+          });
+        }
+      },
+      onError: (e) {
+        print("Error fetching location: $e");
+      },
     );
   }
-}
 
+  Future<void> _logoutRescuer() async {
+    try {
+      final rescuerId = FirebaseAuth.instance.currentUser?.uid;
+      if (rescuerId != null) {
+        // Fetch the fire station name
+        String fireStationName = "Unknown Station";
+        try {
+          final snapshot = await FirebaseDatabase.instance
+              .ref('rescuer/$rescuerId/stationName')
+              .get();
+          if (snapshot.exists) {
+            fireStationName = snapshot.value.toString();
+          }
+        } catch (e) {
+          print("Error fetching fire station name during logout: $e");
+        }
 
+        // Remove the rescuer's entry from rescuer_realtime_location
+        await FirebaseDatabase.instance
+            .ref('rescuer_realtime_location/$fireStationName/$rescuerId')
+            .remove()
+            .then((_) =>
+                print("Rescuer's real-time location removed successfully"))
+            .catchError((error) {
+          print("Error removing rescuer's real-time location: $error");
+        });
+
+        // Remove realTimeLocation for active dispatch
+        if (activeDispatchKey != null) {
+          await FirebaseDatabase.instance
+              .ref('dispatches/$activeDispatchKey/realTimeLocation')
+              .remove()
+              .then((_) =>
+                  print("Real-time location for dispatch removed successfully"))
+              .catchError((error) {
+            print("Error removing real-time location for dispatch: $error");
+          });
+        }
+      }
+
+      // Stop location updates
+      _positionStream?.cancel();
+
+      // Sign out from Firebase Auth
+      await FirebaseAuth.instance.signOut();
+
+      // Navigate to login screen
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Logout failed: $e")),
+      );
+    }
+  }
 
   void _listenForDispatchUpdates() {
     if (rescuerId == null) {
@@ -302,14 +307,16 @@ Future<void> _logoutRescuer() async {
     final DatabaseReference dispatchRef =
         FirebaseDatabase.instance.ref('dispatches'); // Firebase path
 
-    _firebaseDispatchListener = dispatchRef.onValue.listen((DatabaseEvent event) {
+    _firebaseDispatchListener =
+        dispatchRef.onValue.listen((DatabaseEvent event) {
       print("Firebase Listener Triggered");
 
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
       if (data != null) {
         data.forEach((key, dispatch) {
           print("Dispatch Data: $dispatch");
-          if (dispatch['rescuerID'] == rescuerId && dispatch['status'] == "Dispatching") {
+          if (dispatch['rescuerID'] == rescuerId &&
+              dispatch['status'] == "Dispatching") {
             print("Dispatch Matched for Rescuer: $key");
             _showDispatchNotification(dispatch, key);
           } else {
@@ -322,222 +329,226 @@ Future<void> _logoutRescuer() async {
     });
   }
 
-  void _showDispatchNotification(Map<dynamic, dynamic> dispatch, String dispatchKey) {
-  if (!mounted) return;
-  final String location = dispatch['location'] ?? "Unknown location";
-  final String dispatchTime = dispatch['dispatchTime'] ?? "Unknown time";
+  void _showDispatchNotification(
+      Map<dynamic, dynamic> dispatch, String dispatchKey) {
+    if (!mounted) return;
+    final String location = dispatch['location'] ?? "Unknown location";
+    final String dispatchTime = dispatch['dispatchTime'] ?? "Unknown time";
 
-  _triggerDispatchAlert(); // Start sound and blinking when dispatch received
+    _triggerDispatchAlert(); // Start sound and blinking when dispatch received
 
-  showDialog(
-    context: context,
-    barrierDismissible: false, // Prevent the dialog from being dismissed by tapping outside
-    builder: (context) => AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
-      ),
-      backgroundColor: const Color.fromRGBO(255, 234, 234, 1),
-      title: const Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.warning, color: Colors.red),
-          SizedBox(width: 10),
-          Text(
-            'Dispatch Notification',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+    showDialog(
+      context: context,
+      barrierDismissible:
+          false, // Prevent the dialog from being dismissed by tapping outside
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
+        ),
+        backgroundColor: const Color.fromRGBO(255, 234, 234, 1),
+        title: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.warning, color: Colors.red),
+            SizedBox(width: 10),
+            Text(
+              'Dispatch Notification',
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'You have been dispatched to:',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              location,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Dispatch Time:',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              dispatchTime,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () async {
+              setState(() {
+                activeDispatchKey =
+                    dispatchKey; // Assign the active dispatch key
+              });
+
+              _stopSirenAnimation();
+              _stopSoundAlert(); // Stop sound
+              _stopBlinkingBackground(); // Stop blinking background
+              await _updateDispatchStatus(
+                  dispatchKey, "Dispatched"); // Update dispatch status
+
+              Navigator.of(context).pop(); // Close the dialog
+
+              // Show route and slidable button
+              setState(() {
+                isNavigating = true; // Start navigation
+                showSlidableButton = true; // Show the slidable button
+              });
+
+              // Start real-time location updates
+              _startLocationUpdates();
+              await _fetchFireLocation(dispatchKey);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'Accept',
+              style: TextStyle(fontSize: 16),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              _stopSirenAnimation();
+              _stopSoundAlert(); // Stop sound
+              _stopBlinkingBackground(); // Stop blinking background
+              await _updateDispatchStatus(
+                  dispatchKey, "Rejected"); // Update dispatch status
+              Navigator.of(context).pop(); // Close the dialog
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'Reject',
+              style: TextStyle(fontSize: 16),
+            ),
           ),
         ],
       ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'You have been dispatched to:',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            location,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Dispatch Time:',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            dispatchTime,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        ElevatedButton(
-          onPressed: () async {
-  setState(() {
-    activeDispatchKey = dispatchKey; // Assign the active dispatch key
-  });
-
-  _stopSirenAnimation();
-  _stopSoundAlert(); // Stop sound
-  _stopBlinkingBackground(); // Stop blinking background
-  await _updateDispatchStatus(dispatchKey, "Dispatched"); // Update dispatch status
-
-  Navigator.of(context).pop(); // Close the dialog
-
-  // Show route and slidable button
-  setState(() {
-    isNavigating = true; // Start navigation
-    showSlidableButton = true; // Show the slidable button
-  });
-
-  // Start real-time location updates
-  _startLocationUpdates();
-  await _fetchFireLocation(dispatchKey);
-},
-
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          child: const Text(
-            'Accept',
-            style: TextStyle(fontSize: 16),
-          ),
-        ),
-        ElevatedButton(
-          onPressed: () async {
-           
-            _stopSirenAnimation();
-            _stopSoundAlert(); // Stop sound
-            _stopBlinkingBackground(); // Stop blinking background
-            await _updateDispatchStatus(dispatchKey, "Rejected"); // Update dispatch status
-            Navigator.of(context).pop(); // Close the dialog
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          child: const Text(
-            'Reject',
-            style: TextStyle(fontSize: 16),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
+    );
+  }
 
   /// Updates the status of a dispatch in the 'dispatches' table and
   /// ensures that the corresponding 'reports_image' entries inherit the same status.
-Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
-  try {
-    // Update the status in the 'dispatches' table
-    final DatabaseReference dispatchRef =
-        FirebaseDatabase.instance.ref('dispatches/$dispatchKey');
-    await dispatchRef.update({"status": status});
-    print("Dispatch $dispatchKey status updated to $status.");
+  Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
+    try {
+      // Update the status in the 'dispatches' table
+      final DatabaseReference dispatchRef =
+          FirebaseDatabase.instance.ref('dispatches/$dispatchKey');
+      await dispatchRef.update({"status": status});
+      print("Dispatch $dispatchKey status updated to $status.");
 
-    // Update the status in the 'Calls' table
-    final DatabaseReference callsRef =
-        FirebaseDatabase.instance.ref('Calls');
-    final Query callsQuery = callsRef.orderByChild('dispatchID').equalTo(dispatchKey);
+      // Update the status in the 'Calls' table
+      final DatabaseReference callsRef = FirebaseDatabase.instance.ref('Calls');
+      final Query callsQuery =
+          callsRef.orderByChild('dispatchID').equalTo(dispatchKey);
 
-    final DatabaseEvent callsSnapshot = await callsQuery.once();
+      final DatabaseEvent callsSnapshot = await callsQuery.once();
 
-    if (callsSnapshot.snapshot.exists) {
-      final Map<dynamic, dynamic> callsData = callsSnapshot.snapshot.value as Map<dynamic, dynamic>;
+      if (callsSnapshot.snapshot.exists) {
+        final Map<dynamic, dynamic> callsData =
+            callsSnapshot.snapshot.value as Map<dynamic, dynamic>;
 
-      for (var callKey in callsData.keys) {
-        await callsRef.child(callKey).update({"status": status});
-        print("Call entry $callKey status updated to $status.");
+        for (var callKey in callsData.keys) {
+          await callsRef.child(callKey).update({"status": status});
+          print("Call entry $callKey status updated to $status.");
+        }
+      } else {
+        print("No Calls entries found for dispatchID: $dispatchKey.");
       }
-    } else {
-      print("No Calls entries found for dispatchID: $dispatchKey.");
-    }
 
-    // Update the status in the 'reports_image' table
-    final DatabaseReference reportsImageRef =
-        FirebaseDatabase.instance.ref('reports_image');
+      // Update the status in the 'reports_image' table
+      final DatabaseReference reportsImageRef =
+          FirebaseDatabase.instance.ref('reports_image');
 
-    final Query reportQuery = reportsImageRef.orderByChild('dispatchID').equalTo(dispatchKey);
-    final DatabaseEvent reportSnapshot = await reportQuery.once();
+      final Query reportQuery =
+          reportsImageRef.orderByChild('dispatchID').equalTo(dispatchKey);
+      final DatabaseEvent reportSnapshot = await reportQuery.once();
 
-    if (reportSnapshot.snapshot.exists) {
-      final Map<dynamic, dynamic> reportsData = reportSnapshot.snapshot.value as Map<dynamic, dynamic>;
+      if (reportSnapshot.snapshot.exists) {
+        final Map<dynamic, dynamic> reportsData =
+            reportSnapshot.snapshot.value as Map<dynamic, dynamic>;
 
-      for (var reportKey in reportsData.keys) {
-        await reportsImageRef.child(reportKey).update({"status": status});
-        print("Report entry $reportKey status updated to $status.");
+        for (var reportKey in reportsData.keys) {
+          await reportsImageRef.child(reportKey).update({"status": status});
+          print("Report entry $reportKey status updated to $status.");
+        }
+      } else {
+        print("No reports_image entries found for dispatchID: $dispatchKey.");
       }
-    } else {
-      print("No reports_image entries found for dispatchID: $dispatchKey.");
+    } catch (e) {
+      print("Error updating dispatch and related data: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error updating status: $e")),
+      );
     }
-
-  } catch (e) {
-    print("Error updating dispatch and related data: $e");
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Error updating status: $e")),
-    );
   }
-}
 
+  Future<void> _fetchFireLocation(String dispatchKey) async {
+    try {
+      // Reference the specific dispatch in Firebase
+      final DatabaseReference dispatchRef =
+          FirebaseDatabase.instance.ref('dispatches/$dispatchKey');
 
+      final DataSnapshot snapshot = await dispatchRef.get();
 
- Future<void> _fetchFireLocation(String dispatchKey) async {
-  try {
-    // Reference the specific dispatch in Firebase
-    final DatabaseReference dispatchRef =
-        FirebaseDatabase.instance.ref('dispatches/$dispatchKey');
+      if (snapshot.exists) {
+        final data = snapshot.value as Map<dynamic, dynamic>;
 
-    final DataSnapshot snapshot = await dispatchRef.get();
+        // Extract latitude and longitude from Firebase
+        final double latitude = double.parse(data['latitude'].toString());
+        final double longitude = double.parse(data['longitude'].toString());
 
-    if (snapshot.exists) {
-      final data = snapshot.value as Map<dynamic, dynamic>;
+        setState(() {
+          fireLocation = LatLng(latitude, longitude); // Set the fire location
+        });
 
-      // Extract latitude and longitude from Firebase
-      final double latitude = double.parse(data['latitude'].toString());
-      final double longitude = double.parse(data['longitude'].toString());
+        // Center the map on the fire location
+        _mapController.move(fireLocation!, 16.0);
 
-      setState(() {
-        fireLocation = LatLng(latitude, longitude); // Set the fire location
-      });
+        print("Fire Location: Latitude: $latitude, Longitude: $longitude");
 
-      // Center the map on the fire location
-      _mapController.move(fireLocation!, 16.0);
-
-      print("Fire Location: Latitude: $latitude, Longitude: $longitude");
-
-      // Fetch and display route to fire
-      await _fetchRouteToFire();
-    } else {
-      print("No data found for dispatchKey: $dispatchKey");
+        // Fetch and display route to fire
+        await _fetchRouteToFire();
+      } else {
+        print("No data found for dispatchKey: $dispatchKey");
+      }
+    } catch (e) {
+      print("Error fetching fire location from Firebase: $e");
     }
-  } catch (e) {
-    print("Error fetching fire location from Firebase: $e");
   }
-}
-
 
   Future<void> _fetchRouteToFire() async {
     if (_currentLocation == null || fireLocation == null) {
@@ -545,7 +556,8 @@ Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
       return;
     }
 
-    final accessToken = "pk.eyJ1IjoieWhhbmllMTUiLCJhIjoiY2x5bHBrenB1MGxmczJpczYxbjRxbGxsYSJ9.DPO8TGv3Z4Q9zg08WhfoCQ"; // Replace with your Mapbox access token
+    const accessToken =
+        "pk.eyJ1IjoieWhhbmllMTUiLCJhIjoiY2x5bHBrenB1MGxmczJpczYxbjRxbGxsYSJ9.DPO8TGv3Z4Q9zg08WhfoCQ"; // Replace with your Mapbox access token
     final url =
         "https://api.mapbox.com/directions/v5/mapbox/driving/${_currentLocation!.longitude},${_currentLocation!.latitude};${fireLocation!.longitude},${fireLocation!.latitude}?geometries=geojson&steps=true&access_token=pk.eyJ1IjoieWhhbmllMTUiLCJhIjoiY2x5bHBrenB1MGxmczJpczYxbjRxbGxsYSJ9.DPO8TGv3Z4Q9zg08WhfoCQ";
 
@@ -559,9 +571,8 @@ Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
         final routeDuration = data['routes'][0]['duration'] / 60;
 
         setState(() {
-          routePoints = geometry
-              .map((point) => LatLng(point[1], point[0]))
-              .toList();
+          routePoints =
+              geometry.map((point) => LatLng(point[1], point[0])).toList();
           routeSteps = steps;
           distance = "${routeDistance.toStringAsFixed(1)} km";
           duration = "${routeDuration.toStringAsFixed(1)} mins";
@@ -577,15 +588,14 @@ Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
 
   void _recenterMap() {
     if (_currentLocation != null) {
-      _mapController.move(_currentLocation!, 16.0); // Re-centers the map on the current location
+      _mapController.move(_currentLocation!,
+          16.0); // Re-centers the map on the current location
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Current location not available")),
       );
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -611,75 +621,78 @@ Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
       drawer: Drawer(
         child: ListView(
           children: [
-           DrawerHeader(
-  decoration: const BoxDecoration(
-    gradient: LinearGradient(
-      colors: [Color.fromARGB(255, 87, 17, 17), Color.fromARGB(255, 158, 40, 40)], // Gradient for a sleek design
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    ),
-  ),
-  child: FutureBuilder(
-    future: FirebaseDatabase.instance
-        .ref('rescuer/${FirebaseAuth.instance.currentUser?.uid}')
-        .get(),
-    builder: (context, snapshot) {
-      if (snapshot.connectionState == ConnectionState.waiting) {
-        return const Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        );
-      } else if (snapshot.hasError) {
-        return const Center(
-          child: Text(
-            "Error fetching data",
-            style: TextStyle(color: Colors.white),
-          ),
-        );
-      } else if (snapshot.hasData && snapshot.data!.exists) {
-        final data = snapshot.data?.value as Map<dynamic, dynamic>;
-        final fireStationName = data['stationName'] ?? "Unknown Station";
+            DrawerHeader(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color.fromARGB(255, 87, 17, 17),
+                    Color.fromARGB(255, 158, 40, 40)
+                  ], // Gradient for a sleek design
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: FutureBuilder(
+                future: FirebaseDatabase.instance
+                    .ref('rescuer/${FirebaseAuth.instance.currentUser?.uid}')
+                    .get(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    );
+                  } else if (snapshot.hasError) {
+                    return const Center(
+                      child: Text(
+                        "Error fetching data",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    );
+                  } else if (snapshot.hasData && snapshot.data!.exists) {
+                    final data = snapshot.data?.value as Map<dynamic, dynamic>;
+                    final fireStationName =
+                        data['stationName'] ?? "Unknown Station";
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Image.asset(
-                  'assets/logo.png', // Replace with your "logo.png" path
-                  height: 70,
-                  fit: BoxFit.cover,
-                ),
-                const SizedBox(width: 0),
-                Image.asset(
-                  'assets/text.png', // Replace with your "text.png" path
-                  height: 30,
-                  fit: BoxFit.cover,
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Text(
-              fireStationName, // Display dynamic fire station name
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Image.asset(
+                              'assets/logo.png', // Replace with your "logo.png" path
+                              height: 70,
+                              fit: BoxFit.cover,
+                            ),
+                            const SizedBox(width: 0),
+                            Image.asset(
+                              'assets/text.png', // Replace with your "text.png" path
+                              height: 30,
+                              fit: BoxFit.cover,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          fireStationName, // Display dynamic fire station name
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    );
+                  } else {
+                    return const Center(
+                      child: Text(
+                        "No data available",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    );
+                  }
+                },
               ),
             ),
-          ],
-        );
-      } else {
-        return const Center(
-          child: Text(
-            "No data available",
-            style: TextStyle(color: Colors.white),
-          ),
-        );
-      }
-    },
-  ),
-),
-
             ListTile(
               leading: const Icon(Icons.person),
               title: const Text("Profile"),
@@ -698,7 +711,8 @@ Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => const HistoryScreen(), // Navigate to the history screen
+                    builder: (context) =>
+                        const HistoryScreen(), // Navigate to the history screen
                   ),
                 );
               },
@@ -710,6 +724,18 @@ Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const FireResolvedScreen(),
+                  ),
+                );
+              },
+            ),
+            // Add this new ListTile for Firefighters
+            ListTile(
+              leading: const Icon(Icons.people),
+              title: const Text("Firefighters"),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const FirefighterListScreen(),
                   ),
                 );
               },
@@ -741,8 +767,8 @@ Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: _currentLocation ??
-                  const LatLng(14.676041, 121.043700),
+              initialCenter:
+                  _currentLocation ?? const LatLng(14.676041, 121.043700),
               initialZoom: 16.0,
             ),
             children: [
@@ -788,7 +814,8 @@ Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
               left: 0,
               right: 0,
               child: Center(
-                child: AnimatedSiren(), // Replace with your AnimatedSiren widget
+                child:
+                    AnimatedSiren(), // Replace with your AnimatedSiren widget
               ),
             ),
           // Slidable Button displayed at the top when showSlidableButton is true
@@ -805,86 +832,91 @@ Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: HorizontalSlidableButton(
-  width: MediaQuery.of(context).size.width * 0.75,
-  buttonWidth: 60,
-  color: Colors.grey.shade300,
-  buttonColor: Colors.redAccent,
-  borderRadius: BorderRadius.circular(12),
-  label: const Center(
-    child: Text(
-      "Slide to Resolve Fire",
-      style: TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-        color: Colors.black,
-      ),
-    ),
-  ),
-  onChanged: (position) async {
-  if (position == SlidableButtonPosition.end) {
-    // Stop location updates
-    _positionStream?.cancel();
+                    width: MediaQuery.of(context).size.width * 0.75,
+                    buttonWidth: 60,
+                    color: Colors.grey.shade300,
+                    buttonColor: Colors.redAccent,
+                    borderRadius: BorderRadius.circular(12),
+                    label: const Center(
+                      child: Text(
+                        "Slide to Resolve Fire",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                    onChanged: (position) async {
+                      if (position == SlidableButtonPosition.end) {
+                        // Stop location updates
+                        _positionStream?.cancel();
 
-    // Remove real-time location from Firebase
-    if (activeDispatchKey != null) {
-      FirebaseDatabase.instance
-          .ref('dispatches/$activeDispatchKey/realTimeLocation')
-          .remove()
-          .then((_) => print("Real-time location removed successfully"))
-          .catchError((error) {
-        print("Error removing realTimeLocation: $error");
-      });
-    }
+                        // Remove real-time location from Firebase
+                        if (activeDispatchKey != null) {
+                          FirebaseDatabase.instance
+                              .ref(
+                                  'dispatches/$activeDispatchKey/realTimeLocation')
+                              .remove()
+                              .then((_) => print(
+                                  "Real-time location removed successfully"))
+                              .catchError((error) {
+                            print("Error removing realTimeLocation: $error");
+                          });
+                        }
 
-    setState(() {
-      // Reset variables
-      fireLocation = null;
-      routePoints.clear();
-      isNavigating = false;
-      showSlidableButton = false;
-      showRoute = false;
-      distance = "";
-      duration = "";
-      currentInstruction = "";
-      activeDispatchKey = null; // Clear active dispatch key
-    });
+                        setState(() {
+                          // Reset variables
+                          fireLocation = null;
+                          routePoints.clear();
+                          isNavigating = false;
+                          showSlidableButton = false;
+                          showRoute = false;
+                          distance = "";
+                          duration = "";
+                          currentInstruction = "";
+                          activeDispatchKey = null; // Clear active dispatch key
+                        });
 
-    try {
-      // Update dispatch status to "Resolved"
-      final DatabaseReference dispatchRef =
-          FirebaseDatabase.instance.ref('dispatches');
-      final Query query = dispatchRef.orderByChild('rescuerID').equalTo(rescuerId);
+                        try {
+                          // Update dispatch status to "Resolved"
+                          final DatabaseReference dispatchRef =
+                              FirebaseDatabase.instance.ref('dispatches');
+                          final Query query = dispatchRef
+                              .orderByChild('rescuerID')
+                              .equalTo(rescuerId);
 
-      final DataSnapshot snapshot = await query.get();
-      if (snapshot.exists) {
-        Map<dynamic, dynamic>? dispatches = snapshot.value as Map?;
-        if (dispatches != null) {
-          for (var entry in dispatches.entries) {
-            if (entry.value['status'] == "Dispatched") {
-              await _updateDispatchStatus(entry.key, 'Resolved'); // Send Resolved status
-              break;
-            }
-          }
-        }
-      }
-    } catch (e) {
-      print("Error updating dispatch status: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error updating status: $e")),
-      );
-    }
+                          final DataSnapshot snapshot = await query.get();
+                          if (snapshot.exists) {
+                            Map<dynamic, dynamic>? dispatches =
+                                snapshot.value as Map?;
+                            if (dispatches != null) {
+                              for (var entry in dispatches.entries) {
+                                if (entry.value['status'] == "Dispatched") {
+                                  await _updateDispatchStatus(entry.key,
+                                      'Resolved'); // Send Resolved status
+                                  break;
+                                }
+                              }
+                            }
+                          }
+                        } catch (e) {
+                          print("Error updating dispatch status: $e");
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                                content: Text("Error updating status: $e")),
+                          );
+                        }
 
-    // Navigate to the Fire Resolved screen
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const FireResolvedScreen(),
-      ),
-    );
-  }
-},
-
-),
-
+                        // Navigate to the Fire Resolved screen
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const FireResolvedScreen(),
+                          ),
+                        );
+                      }
+                    },
+                  ),
                 ),
               ),
             ),
@@ -936,10 +968,11 @@ Future<void> _updateDispatchStatus(String dispatchKey, String status) async {
                     style: TextStyle(fontSize: 16),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        const Color.fromARGB(255, 241, 51, 37), // Consistent theme color
+                    backgroundColor: const Color.fromARGB(
+                        255, 241, 51, 37), // Consistent theme color
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8.0), // Rounded corners for the button
+                      borderRadius: BorderRadius.circular(
+                          8.0), // Rounded corners for the button
                     ),
                     padding: const EdgeInsets.symmetric(
                         vertical: 12.0), // Increased button height
